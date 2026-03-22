@@ -1,0 +1,237 @@
+package org.example.scheduler.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.example.scheduler.domain.Participant;
+import org.example.scheduler.domain.TaskDefinition;
+import org.example.scheduler.dto.CalendarAssignmentDto;
+import org.example.scheduler.repository.ParticipantRepository;
+import org.example.scheduler.repository.TaskDefinitionRepository;
+import org.example.scheduler.service.DistributionService;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Controller
+@RequiredArgsConstructor
+public class WebController {
+
+    private final DistributionService distributionService;
+    private final TaskDefinitionRepository taskRepository;
+    private final ParticipantRepository participantRepository;
+
+    @GetMapping("/")
+    public String index(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Long filterTaskId,
+            @RequestParam(required = false) Long filterParticipantId,
+            Model model) {
+        
+        LocalDate now = LocalDate.now();
+        int targetYear = (year == null) ? now.getYear() : year;
+        int targetMonth = (month == null) ? now.getMonthValue() : month;
+
+        // ... (달력 그리드 생성 로직 유지)
+        LocalDate firstDay = LocalDate.of(targetYear, targetMonth, 1);
+        int dayOfWeekValue = firstDay.getDayOfWeek().getValue(); 
+        if (dayOfWeekValue == 7) dayOfWeekValue = 0; 
+
+        List<List<LocalDate>> weeks = new ArrayList<>();
+        List<LocalDate> currentWeek = new ArrayList<>();
+        for (int i = 0; i < dayOfWeekValue; i++) currentWeek.add(null);
+        int lengthOfMonth = firstDay.lengthOfMonth();
+        for (int day = 1; day <= lengthOfMonth; day++) {
+            currentWeek.add(LocalDate.of(targetYear, targetMonth, day));
+            if (currentWeek.size() == 7) { weeks.add(currentWeek); currentWeek = new ArrayList<>(); }
+        }
+        if (!currentWeek.isEmpty()) { while (currentWeek.size() < 7) currentWeek.add(null); weeks.add(currentWeek); }
+
+        // 필터링 적용하여 일정 데이터 조회
+        List<CalendarAssignmentDto> assignments = distributionService.getCalendarAssignments(targetYear, targetMonth, filterTaskId, filterParticipantId);
+        Map<LocalDate, List<CalendarAssignmentDto.AssignmentDetailDto>> assignmentsMap = assignments.stream()
+                .collect(Collectors.toMap(CalendarAssignmentDto::getDate, CalendarAssignmentDto::getAssignments));
+
+        model.addAttribute("year", targetYear);
+        model.addAttribute("month", targetMonth);
+        model.addAttribute("calendarWeeks", weeks);
+        model.addAttribute("assignmentsMap", assignmentsMap);
+        
+        // 필터 UI용 데이터
+        model.addAttribute("tasks", taskRepository.findAll());
+        model.addAttribute("participants", participantRepository.findAll());
+        model.addAttribute("filterTaskId", filterTaskId);
+        model.addAttribute("filterParticipantId", filterParticipantId);
+
+        LocalDate currentMonth = LocalDate.of(targetYear, targetMonth, 1);
+        LocalDate prev = currentMonth.minusMonths(1);
+        LocalDate next = currentMonth.plusMonths(1);
+        model.addAttribute("prevYear", prev.getYear());
+        model.addAttribute("prevMonth", prev.getMonthValue());
+        model.addAttribute("nextYear", next.getYear());
+        model.addAttribute("nextMonth", next.getMonthValue());
+
+        return "index";
+    }
+
+    @PostMapping("/assignments/manual")
+    public String manualAssign(Long taskId, String date, Long participantId, int year, int month) {
+        distributionService.manualAssign(taskId, LocalDate.parse(date), participantId);
+        return "redirect:/?year=" + year + "&month=" + month;
+    }
+
+    // --- 업무 관리 ---
+    @GetMapping("/tasks")
+    public String tasks(Model model) {
+        model.addAttribute("tasks", taskRepository.findAll());
+        model.addAttribute("allParticipants", participantRepository.findAll());
+        return "tasks";
+    }
+
+    @PostMapping("/tasks/add")
+    public String addTask(String taskName, String cycleType, String cycleValue, int requiredParticipantsPerDay, String color,
+                          @RequestParam(required = false) List<Long> participantIds) {
+        TaskDefinition task = new TaskDefinition(taskName, cycleType, cycleValue, requiredParticipantsPerDay);
+        task.setColor(color);
+        if (participantIds != null) {
+            List<Participant> selectedParticipants = participantRepository.findAllById(participantIds);
+            task.setAllowedParticipants(selectedParticipants);
+        }
+        taskRepository.save(task);
+        return "redirect:/tasks";
+    }
+
+    @PostMapping("/tasks/delete")
+    public String deleteTask(Long taskId) {
+        taskRepository.deleteById(taskId);
+        return "redirect:/tasks";
+    }
+
+    @PostMapping("/tasks/updateParticipants")
+    public String updateParticipants(Long taskId, @RequestParam(required = false) List<Long> participantIds) {
+        TaskDefinition task = taskRepository.findById(taskId).get();
+        if (participantIds == null) {
+            task.setAllowedParticipants(new ArrayList<>());
+        } else {
+            task.setAllowedParticipants(participantRepository.findAllById(participantIds));
+        }
+        taskRepository.save(task);
+        return "redirect:/tasks";
+    }
+
+    @PostMapping("/tasks/updateConflicts")
+    public String updateConflicts(Long taskId, @RequestParam(required = false) List<Long> conflictTaskIds) {
+        TaskDefinition task = taskRepository.findById(taskId).get();
+        if (conflictTaskIds == null) {
+            task.setConflictingTasks(new ArrayList<>());
+        } else {
+            task.setConflictingTasks(taskRepository.findAllById(conflictTaskIds));
+        }
+        taskRepository.save(task);
+        return "redirect:/tasks";
+    }
+
+    // --- 참여자 관리 ---
+    @GetMapping("/participants")
+    public String participants(Model model) {
+        model.addAttribute("participants", participantRepository.findAll());
+        return "participants";
+    }
+
+    @PostMapping("/participants/add")
+    public String addParticipant(String name, String joinDate) {
+        participantRepository.save(new Participant(name, LocalDate.parse(joinDate)));
+        return "redirect:/participants";
+    }
+
+    @PostMapping("/participants/delete")
+    public String deleteParticipant(Long participantId) {
+        participantRepository.deleteById(participantId);
+        return "redirect:/participants";
+    }
+
+    // --- 참여자 상세 관리 (불참/규칙) ---
+    @GetMapping("/participants/detail")
+    public String participantDetail(Long id, Model model) {
+        Participant p = participantRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
+        model.addAttribute("p", p);
+        return "participant_detail";
+    }
+
+    @PostMapping("/participants/addRange")
+    public String addUnavailableRange(Long participantId, String startDate, String endDate) {
+        Participant p = participantRepository.findById(participantId).get();
+        p.addUnavailableRange(LocalDate.parse(startDate), LocalDate.parse(endDate));
+        participantRepository.save(p);
+        return "redirect:/participants/detail?id=" + participantId;
+    }
+
+    @PostMapping("/participants/addRule")
+    public String addAvailabilityRule(Long participantId, String ruleType) {
+        Participant p = participantRepository.findById(participantId).get();
+        p.addAvailabilityRule(ruleType);
+        participantRepository.save(p);
+        return "redirect:/participants/detail?id=" + participantId;
+    }
+
+    // --- 일정 분배 실행 ---
+    @GetMapping("/distribute")
+    public String distributePage(Model model) {
+        model.addAttribute("tasks", taskRepository.findAll());
+        model.addAttribute("now", LocalDate.now());
+        return "distribute";
+    }
+
+    @PostMapping("/distribute/run")
+    public String runDistribution(Long taskId, int year, int month) {
+        distributionService.distribute(taskId, year, month);
+        return "redirect:/?year=" + year + "&month=" + month;
+    }
+
+    @PostMapping("/distribute/runCustom")
+    public String runCustomDistribution(Long taskId, String startDate, String endDate) {
+        LocalDate start = LocalDate.parse(startDate);
+        LocalDate end = LocalDate.parse(endDate);
+        distributionService.distribute(taskId, start, end);
+        return "redirect:/?year=" + start.getYear() + "&month=" + start.getMonthValue();
+    }
+
+    @PostMapping("/assignments/delete")
+    public String deleteAssignment(Long id, int year, int month) {
+        distributionService.deleteAssignment(id);
+        return "redirect:/?year=" + year + "&month=" + month;
+    }
+
+    @PostMapping("/assignments/cancel")
+    public String cancelAndReplace(Long id, int year, int month) {
+        distributionService.cancelAndReplace(id);
+        return "redirect:/?year=" + year + "&month=" + month;
+    }
+
+    // --- 통계 데이터 내보내기/가져오기 ---
+    @GetMapping("/stats/export")
+    @ResponseBody
+    public String exportStats() {
+        return distributionService.exportStatsJson();
+    }
+
+    @GetMapping("/stats/manage")
+    public String manageStats() {
+        return "manage_stats";
+    }
+
+    @PostMapping("/stats/import")
+    public String importStats(@RequestParam String json) {
+        distributionService.importStatsJson(json);
+        return "redirect:/participants";
+    }
+}
