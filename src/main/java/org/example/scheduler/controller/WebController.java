@@ -1,12 +1,8 @@
 package org.example.scheduler.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.example.scheduler.domain.Participant;
-import org.example.scheduler.domain.TaskDefinition;
 import org.example.scheduler.dto.CalendarAssignmentDto;
-import org.example.scheduler.repository.ParticipantRepository;
-import org.example.scheduler.repository.TaskDefinitionRepository;
-import org.example.scheduler.service.DistributionService;
+import org.example.scheduler.service.*;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,8 +21,9 @@ import java.util.stream.Collectors;
 public class WebController {
 
     private final DistributionService distributionService;
-    private final TaskDefinitionRepository taskRepository;
-    private final ParticipantRepository participantRepository;
+    private final TaskService taskService;
+    private final ParticipantService participantService;
+    private final DataMigrationService dataMigrationService;
 
     @GetMapping("/")
     public String index(
@@ -40,7 +37,6 @@ public class WebController {
         int targetYear = (year == null) ? now.getYear() : year;
         int targetMonth = (month == null) ? now.getMonthValue() : month;
 
-        // ... (달력 그리드 생성 로직 유지)
         LocalDate firstDay = LocalDate.of(targetYear, targetMonth, 1);
         int dayOfWeekValue = firstDay.getDayOfWeek().getValue(); 
         if (dayOfWeekValue == 7) dayOfWeekValue = 0; 
@@ -55,7 +51,6 @@ public class WebController {
         }
         if (!currentWeek.isEmpty()) { while (currentWeek.size() < 7) currentWeek.add(null); weeks.add(currentWeek); }
 
-        // 필터링 적용하여 일정 데이터 조회
         List<CalendarAssignmentDto> assignments = distributionService.getCalendarAssignments(targetYear, targetMonth, filterTaskId, filterParticipantId);
         Map<LocalDate, List<CalendarAssignmentDto.AssignmentDetailDto>> assignmentsMap = assignments.stream()
                 .collect(Collectors.toMap(CalendarAssignmentDto::getDate, CalendarAssignmentDto::getAssignments));
@@ -65,9 +60,8 @@ public class WebController {
         model.addAttribute("calendarWeeks", weeks);
         model.addAttribute("assignmentsMap", assignmentsMap);
         
-        // 필터 UI용 데이터
-        model.addAttribute("tasks", taskRepository.findAll());
-        model.addAttribute("participants", participantRepository.findAll());
+        model.addAttribute("tasks", taskService.findAll());
+        model.addAttribute("participants", participantService.findAll());
         model.addAttribute("filterTaskId", filterTaskId);
         model.addAttribute("filterParticipantId", filterParticipantId);
 
@@ -91,102 +85,78 @@ public class WebController {
     // --- 업무 관리 ---
     @GetMapping("/tasks")
     public String tasks(Model model) {
-        model.addAttribute("tasks", taskRepository.findAll());
-        model.addAttribute("allParticipants", participantRepository.findAll());
+        model.addAttribute("tasks", taskService.findAll());
+        model.addAttribute("allParticipants", participantService.findAll());
         return "tasks";
     }
 
     @PostMapping("/tasks/add")
     public String addTask(String taskName, String cycleType, String cycleValue, int requiredParticipantsPerDay, String color,
                           @RequestParam(required = false) List<Long> participantIds) {
-        TaskDefinition task = new TaskDefinition(taskName, cycleType, cycleValue, requiredParticipantsPerDay);
-        task.setColor(color);
-        if (participantIds != null) {
-            List<Participant> selectedParticipants = participantRepository.findAllById(participantIds);
-            task.setAllowedParticipants(selectedParticipants);
-        }
-        taskRepository.save(task);
+        taskService.addTask(taskName, cycleType, cycleValue, requiredParticipantsPerDay, color, participantIds);
         return "redirect:/tasks";
     }
 
     @PostMapping("/tasks/delete")
     public String deleteTask(Long taskId) {
-        taskRepository.deleteById(taskId);
+        taskService.deleteTask(taskId);
         return "redirect:/tasks";
     }
 
     @PostMapping("/tasks/updateParticipants")
     public String updateParticipants(Long taskId, @RequestParam(required = false) List<Long> participantIds) {
-        TaskDefinition task = taskRepository.findById(taskId).get();
-        if (participantIds == null) {
-            task.setAllowedParticipants(new ArrayList<>());
-        } else {
-            task.setAllowedParticipants(participantRepository.findAllById(participantIds));
-        }
-        taskRepository.save(task);
+        taskService.updateParticipants(taskId, participantIds);
         return "redirect:/tasks";
     }
 
     @PostMapping("/tasks/updateConflicts")
     public String updateConflicts(Long taskId, @RequestParam(required = false) List<Long> conflictTaskIds) {
-        TaskDefinition task = taskRepository.findById(taskId).get();
-        if (conflictTaskIds == null) {
-            task.setConflictingTasks(new ArrayList<>());
-        } else {
-            task.setConflictingTasks(taskRepository.findAllById(conflictTaskIds));
-        }
-        taskRepository.save(task);
+        taskService.updateConflicts(taskId, conflictTaskIds);
         return "redirect:/tasks";
     }
 
     // --- 참여자 관리 ---
     @GetMapping("/participants")
     public String participants(Model model) {
-        model.addAttribute("participants", participantRepository.findAll());
+        model.addAttribute("participants", participantService.findAll());
         return "participants";
     }
 
     @PostMapping("/participants/add")
     public String addParticipant(String name, String joinDate) {
-        participantRepository.save(new Participant(name, LocalDate.parse(joinDate)));
+        participantService.addParticipant(name, LocalDate.parse(joinDate));
         return "redirect:/participants";
     }
 
     @PostMapping("/participants/delete")
     public String deleteParticipant(Long participantId) {
-        participantRepository.deleteById(participantId);
+        participantService.deleteParticipant(participantId);
         return "redirect:/participants";
     }
 
     // --- 참여자 상세 관리 (불참/규칙) ---
     @GetMapping("/participants/detail")
     public String participantDetail(Long id, Model model) {
-        Participant p = participantRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Participant not found"));
-        model.addAttribute("p", p);
+        model.addAttribute("p", participantService.findById(id));
         return "participant_detail";
     }
 
     @PostMapping("/participants/addRange")
     public String addUnavailableRange(Long participantId, String startDate, String endDate) {
-        Participant p = participantRepository.findById(participantId).get();
-        p.addUnavailableRange(LocalDate.parse(startDate), LocalDate.parse(endDate));
-        participantRepository.save(p);
+        participantService.addUnavailableRange(participantId, LocalDate.parse(startDate), LocalDate.parse(endDate));
         return "redirect:/participants/detail?id=" + participantId;
     }
 
     @PostMapping("/participants/addRule")
     public String addAvailabilityRule(Long participantId, String ruleType) {
-        Participant p = participantRepository.findById(participantId).get();
-        p.addAvailabilityRule(ruleType);
-        participantRepository.save(p);
+        participantService.addAvailabilityRule(participantId, ruleType);
         return "redirect:/participants/detail?id=" + participantId;
     }
 
     // --- 일정 분배 실행 ---
     @GetMapping("/distribute")
     public String distributePage(Model model) {
-        model.addAttribute("tasks", taskRepository.findAll());
+        model.addAttribute("tasks", taskService.findAll());
         model.addAttribute("now", LocalDate.now());
         return "distribute";
     }
@@ -221,7 +191,7 @@ public class WebController {
     @GetMapping("/stats/export")
     @ResponseBody
     public String exportStats() {
-        return distributionService.exportStatsJson();
+        return dataMigrationService.exportStatsJson();
     }
 
     @GetMapping("/stats/manage")
@@ -231,7 +201,7 @@ public class WebController {
 
     @PostMapping("/stats/import")
     public String importStats(@RequestParam String json) {
-        distributionService.importStatsJson(json);
+        dataMigrationService.importStatsJson(json);
         return "redirect:/participants";
     }
 }
