@@ -59,7 +59,7 @@
 
         <!-- 자유 기간 배분 폼 -->
         <div id="customMode" class="form-section">
-            <div class="info-box">특정 시작일부터 종료일까지의 일정을 배분합니다.</div>
+... (기존 폼 내용 유지) ...
             <form action="/distribute/runCustom" method="post">
                 <div class="form-group">
                     <label>배분할 업무 선택:</label>
@@ -78,6 +78,38 @@
                     <input type="date" name="endDate" id="customEndDate" required>
                 </div>
                 <button type="submit" class="btn" style="background:#007bff;">기간 일정 생성</button>
+            </form>
+        </div>
+
+        <hr style="margin: 40px 0; border: 0; border-top: 1px solid #eee;">
+
+        <!-- 일정 초기화 섹션 -->
+        <div class="section">
+            <h2 style="color:#dc3545;">일정 초기화 (Clear)</h2>
+            <div class="info-box" style="background-color:#fff5f5; border-color:#feb2b2;">
+                지정한 기간의 배정 일정을 한 번에 삭제합니다. 신중하게 사용하세요.
+            </div>
+            <form action="/distribute/clear" method="post">
+                <div class="form-group">
+                    <label>초기화할 업무:</label>
+                    <select name="taskId">
+                        <option value="">전체 업무 초기화</option>
+                        <c:forEach var="task" items="${tasks}">
+                            <option value="${task.id}">${task.taskName}</option>
+                        </c:forEach>
+                    </select>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div class="form-group" style="flex:1;">
+                        <label>시작일:</label>
+                        <input type="date" name="startDate" value="${now.withDayOfMonth(1)}" required>
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                        <label>종료일:</label>
+                        <input type="date" name="endDate" value="${now.withDayOfMonth(now.lengthOfMonth())}" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn" style="background:#dc3545;" onclick="return confirm('지정된 기간의 일정을 정말로 삭제하시겠습니까?');">선택한 일정 초기화</button>
             </form>
         </div>
     </div>

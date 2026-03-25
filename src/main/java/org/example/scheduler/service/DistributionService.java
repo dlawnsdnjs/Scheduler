@@ -155,4 +155,17 @@ public class DistributionService {
         a1.setStatus(AssignmentStatus.MANUAL_FIXED);
         a2.setStatus(AssignmentStatus.MANUAL_FIXED);
     }
+
+    @Transactional
+    public void clearAssignments(Long taskId, LocalDate start, LocalDate end) {
+        if (taskId != null) {
+            // 특정 업무만 삭제
+            List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, start, end);
+            assignmentRepository.deleteAll(toDelete);
+        } else {
+            // 전체 업무 삭제
+            List<ScheduleAssignment> toDelete = assignmentRepository.findByAssignedDateBetween(start, end);
+            assignmentRepository.deleteAll(toDelete);
+        }
+    }
 }

@@ -3,13 +3,18 @@ package org.example.scheduler.controller;
 import lombok.RequiredArgsConstructor;
 import org.example.scheduler.dto.CalendarAssignmentDto;
 import org.example.scheduler.service.*;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -175,6 +180,12 @@ public class WebController {
         return "redirect:/?year=" + start.getYear() + "&month=" + start.getMonthValue();
     }
 
+    @PostMapping("/distribute/clear")
+    public String clearAssignments(@RequestParam(required = false) Long taskId, String startDate, String endDate) {
+        distributionService.clearAssignments(taskId, LocalDate.parse(startDate), LocalDate.parse(endDate));
+        return "redirect:/distribute";
+    }
+
     @PostMapping("/assignments/delete")
     public String deleteAssignment(Long id, int year, int month) {
         distributionService.deleteAssignment(id);
@@ -187,21 +198,30 @@ public class WebController {
         return "redirect:/?year=" + year + "&month=" + month;
     }
 
-    // --- 통계 데이터 내보내기/가져오기 ---
+    // --- 통계 및 일정 데이터 내보내기/가져오기 ---
     @GetMapping("/stats/export")
-    @ResponseBody
-    public String exportStats() {
-        return dataMigrationService.exportStatsJson();
+    public ResponseEntity<byte[]> exportStats(@RequestParam String startDate, @RequestParam String endDate) {
+        String json = dataMigrationService.exportFullDataJson(LocalDate.parse(startDate), LocalDate.parse(endDate));
+        byte[] content = json.getBytes(StandardCharsets.UTF_8);
+        
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"scheduler_backup_" + startDate + "_" + endDate + ".json\"")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(content);
     }
 
     @GetMapping("/stats/manage")
-    public String manageStats() {
+    public String manageStats(Model model) {
+        model.addAttribute("now", LocalDate.now());
         return "manage_stats";
     }
 
     @PostMapping("/stats/import")
-    public String importStats(@RequestParam String json) {
-        dataMigrationService.importStatsJson(json);
-        return "redirect:/participants";
+    public String importStats(@RequestParam("file") MultipartFile file) throws Exception {
+        if (!file.isEmpty()) {
+            String json = new String(file.getBytes(), StandardCharsets.UTF_8);
+            dataMigrationService.importFullDataJson(json);
+        }
+        return "redirect:/stats/manage";
     }
 }
