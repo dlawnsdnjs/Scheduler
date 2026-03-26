@@ -100,12 +100,16 @@ public class Participant {
     }
 
     private boolean checkRule(AvailabilityRule rule, LocalDate date) {
-        int dayOfMonth = date.getDayOfMonth();
+        // 모든 순환 규칙을 기준일(2026-01-01) 기반 2일 주기 계산으로 통일
+        LocalDate baseDate = LocalDate.of(2026, 1, 1);
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(baseDate, date);
+        int remainder = (int) Math.floorMod(daysBetween, 2); // 0 또는 1
+
         switch (rule.getRuleType()) {
-            case "EVEN_DAYS":
-                return dayOfMonth % 2 == 0;
-            case "ODD_DAYS":
-                return dayOfMonth % 2 != 0;
+            case "EVEN_DAYS": // 짝수일 배정 (나머지 0인 날)
+                return remainder == 0;
+            case "ODD_DAYS": // 홀수일 배정 (나머지 1인 날)
+                return remainder == 1;
             case "WEEKDAYS_ONLY":
                 return date.getDayOfWeek().getValue() <= 5;
             case "WEEKENDS_ONLY":
@@ -114,12 +118,10 @@ public class Participant {
                 if (rule.getRuleValue() == null || !rule.getRuleValue().contains(":")) return false;
                 try {
                     String[] parts = rule.getRuleValue().split(":");
-                    LocalDate baseDate = LocalDate.parse(parts[0]);
+                    LocalDate base = LocalDate.parse(parts[0]);
                     int cycle = Integer.parseInt(parts[1]);
-                    // 기준일로부터의 일수 차이 (음수 포함)
-                    long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(baseDate, date);
-                    // Math.floorMod를 사용하여 음수일 때도 정확한 나머지(나머지 0이면 가용일) 계산
-                    return Math.floorMod(daysBetween, cycle) == 0;
+                    long diff = java.time.temporal.ChronoUnit.DAYS.between(base, date);
+                    return Math.floorMod(diff, cycle) == 0;
                 } catch (Exception e) {
                     return false;
                 }
