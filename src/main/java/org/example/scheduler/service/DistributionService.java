@@ -34,25 +34,29 @@ public class DistributionService {
         TaskDefinition task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found"));
 
-        // 1. 기존 자동 배정 일정 삭제
-        assignmentRepository.deleteByTaskIdAndAssignedDateBetweenAndStatus(taskId, start, end, AssignmentStatus.AUTOMATIC);
+        // 1. 기존 자동 배정 일정 삭제 및 통계 원복
+        List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetweenAndStatus(taskId, start, end, AssignmentStatus.AUTOMATIC);
+        for (ScheduleAssignment a : toDelete) {
+            Participant p = participantRepository.findById(a.getParticipantId()).get();
+            p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - 1));
+            participantRepository.save(p);
+        }
+        assignmentRepository.deleteAll(toDelete);
 
         // 2. 해당 기간의 모든 수행일 리스트 생성
         List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
         List<Participant> allowedParticipants = task.getAllowedParticipants();
         
-        // 3. 참여자별 전체 가용 날짜 수 계산 (희소성 점수)
+        // 3. 참여자별 전체 가용 날짜 수 계산
         Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
 
-        // 4. [개선] 날짜별 배정 난이도 계산 (가용 인원이 적은 날짜가 난이도가 높음)
-        // 각 날짜별로 배정 가능한 참여자의 수를 미리 파악합니다.
+        // 4. 난이도 정렬 및 재배정 수행
         Map<LocalDate, Integer> dateDifficultyMap = new HashMap<>();
         for (LocalDate date : targetDates) {
             long possibleCount = allowedParticipants.stream().filter(p -> p.isAvailable(date)).count();
             dateDifficultyMap.put(date, (int) possibleCount);
         }
 
-        // 5. [개선] 난이도가 높은(가용 인원이 적은) 날짜부터 정렬하여 배정 수행
         List<LocalDate> sortedDates = new ArrayList<>(targetDates);
         sortedDates.sort(Comparator.comparingInt(dateDifficultyMap::get));
 
