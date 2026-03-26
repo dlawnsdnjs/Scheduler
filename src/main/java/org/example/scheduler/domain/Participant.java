@@ -110,13 +110,25 @@ public class Participant {
                 return date.getDayOfWeek().getValue() <= 5;
             case "WEEKENDS_ONLY":
                 return date.getDayOfWeek().getValue() >= 6;
-            // 필요 시 추가 패턴 구현 (예: N-Day Cycle)
+            case "N_DAY_CYCLE":
+                if (rule.getRuleValue() == null || !rule.getRuleValue().contains(":")) return false;
+                try {
+                    String[] parts = rule.getRuleValue().split(":");
+                    LocalDate baseDate = LocalDate.parse(parts[0]);
+                    int cycle = Integer.parseInt(parts[1]);
+                    long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(baseDate, date);
+                    return daysBetween >= 0 && daysBetween % cycle == 0;
+                } catch (Exception e) {
+                    return false;
+                }
             default:
                 return true;
         }
     }
 
-    public void addAvailabilityRule(String ruleType) {
-        this.availabilityRules.add(new AvailabilityRule(this, ruleType));
+    public void addAvailabilityRule(String ruleType, String ruleValue) {
+        AvailabilityRule rule = new AvailabilityRule(this, ruleType);
+        rule.setRuleValue(ruleValue);
+        this.availabilityRules.add(rule);
     }
 }

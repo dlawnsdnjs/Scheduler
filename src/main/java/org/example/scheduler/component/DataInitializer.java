@@ -29,7 +29,7 @@ public class DataInitializer implements CommandLineRunner {
         Participant p1 = new Participant("강백호", LocalDate.of(2024, 1, 1));
         Participant p2 = new Participant("서태웅", LocalDate.of(2024, 1, 1));
         Participant p3 = new Participant("송태섭", LocalDate.of(2024, 1, 1));
-        p3.addAvailabilityRule("EVEN_DAYS"); 
+        p3.addAvailabilityRule("EVEN_DAYS", null); 
 
         Participant p4 = new Participant("정대만", LocalDate.of(2024, 1, 1));
         p4.addUnavailableRange(LocalDate.of(2024, 3, 10), LocalDate.of(2024, 3, 15));

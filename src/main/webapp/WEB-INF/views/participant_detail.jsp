@@ -45,16 +45,39 @@
 
         <div class="section">
             <h3>가용 규칙 설정 (Availability Rules)</h3>
-            <form action="/participants/addRule" method="post">
+            <form action="/participants/addRule" method="post" id="ruleForm">
                 <input type="hidden" name="participantId" value="${p.id}">
-                <select name="ruleType">
+                <select name="ruleType" id="ruleType">
                     <option value="EVEN_DAYS">짝수 날짜만 가능</option>
                     <option value="ODD_DAYS">홀수 날짜만 가능</option>
                     <option value="WEEKDAYS_ONLY">평일만 가능 (월~금)</option>
                     <option value="WEEKENDS_ONLY">주말만 가능 (토~일)</option>
+                    <option value="N_DAY_CYCLE">N일 주기 설정</option>
                 </select>
+                <span id="nDayFields" style="display:none;">
+                    기준일: <input type="date" id="baseDate" style="width:130px;">
+                    주기: <input type="number" id="cycleDays" placeholder="일" style="width:50px;" min="1">
+                    <input type="hidden" name="ruleValue" id="ruleValue">
+                </span>
                 <button type="submit" class="btn" style="background:#28a745;">규칙 추가</button>
             </form>
+            <script>
+                document.getElementById('ruleType').addEventListener('change', function() {
+                    document.getElementById('nDayFields').style.display = (this.value === 'N_DAY_CYCLE') ? 'inline' : 'none';
+                });
+                document.getElementById('ruleForm').addEventListener('submit', function(e) {
+                    if (document.getElementById('ruleType').value === 'N_DAY_CYCLE') {
+                        const baseDate = document.getElementById('baseDate').value;
+                        const cycleDays = document.getElementById('cycleDays').value;
+                        if (!baseDate || !cycleDays) {
+                            alert('기준일과 주기를 입력하세요.');
+                            e.preventDefault();
+                            return;
+                        }
+                        document.getElementById('ruleValue').value = baseDate + ':' + cycleDays;
+                    }
+                });
+            </script>
             <h4>현재 설정된 규칙</h4>
             <ul>
                 <c:forEach var="rule" items="${p.availabilityRules}">
@@ -64,7 +87,10 @@
                             <c:when test="${rule.ruleType == 'ODD_DAYS'}">홀수 날짜 근무</c:when>
                             <c:when test="${rule.ruleType == 'WEEKDAYS_ONLY'}">평일만 근무</c:when>
                             <c:when test="${rule.ruleType == 'WEEKENDS_ONLY'}">주말만 근무</c:when>
-                            <c:otherwise>${rule.ruleType}</c:otherwise>
+                            <c:when test="${rule.ruleType == 'N_DAY_CYCLE'}">
+                                ${rule.ruleValue.split(':')[1]}일 주기 근무 (기준: ${rule.ruleValue.split(':')[0]})
+                            </c:when>
+                            <c:otherwise>${rule.ruleType} (${rule.ruleValue})</c:otherwise>
                         </c:choose>
                     </li>
                 </c:forEach>

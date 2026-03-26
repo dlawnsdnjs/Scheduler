@@ -45,7 +45,17 @@
                     </div>
                     <div class="form-group">
                         <label>주기 값:</label>
-                        <input type="text" name="cycleValue" required placeholder="예: 월,수,금 또는 2">
+                        <div id="weeklyCycle" style="display:block; border: 1px solid #ddd; padding: 5px; background: #fff;">
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="월" style="width:auto;"> 월</label>
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="화" style="width:auto;"> 화</label>
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="수" style="width:auto;"> 수</label>
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="목" style="width:auto;"> 목</label>
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="금" style="width:auto;"> 금</label>
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="토" style="width:auto;"> 토</label>
+                            <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="일" style="width:auto;"> 일</label>
+                        </div>
+                        <input type="text" id="intervalCycle" placeholder="예: 2" style="display:none;">
+                        <input type="hidden" name="cycleValue" id="cycleValue" required>
                     </div>
                 </div>
                 <div style="flex:1;">
@@ -70,8 +80,42 @@
                     </div>
                 </div>
             </div>
-            <button type="submit" class="btn" style="background:#28a745; width:100%; padding:12px;">등록하기</button>
+            <button type="submit" class="btn" id="submitBtn" style="background:#28a745; width:100%; padding:12px;">등록하기</button>
         </form>
+
+        <script>
+            const cycleTypeSelect = document.querySelector('select[name="cycleType"]');
+            const weeklyCycleDiv = document.getElementById('weeklyCycle');
+            const intervalCycleInput = document.getElementById('intervalCycle');
+            
+            cycleTypeSelect.addEventListener('change', function() {
+                if (this.value === 'WEEKLY') {
+                    weeklyCycleDiv.style.display = 'block';
+                    intervalCycleInput.style.display = 'none';
+                } else {
+                    weeklyCycleDiv.style.display = 'none';
+                    intervalCycleInput.style.display = 'block';
+                }
+            });
+
+            document.querySelector('form[action="/tasks/add"]').addEventListener('submit', function(e) {
+                const type = cycleTypeSelect.value;
+                let val = '';
+                if (type === 'WEEKLY') {
+                    const checked = Array.from(document.querySelectorAll('.day-checkbox:checked')).map(cb => cb.value);
+                    val = checked.join(',');
+                } else {
+                    val = intervalCycleInput.value;
+                }
+                
+                if (!val) {
+                    alert('주기 값을 입력하거나 선택하세요.');
+                    e.preventDefault();
+                    return;
+                }
+                document.getElementById('cycleValue').value = val;
+            });
+        </script>
 
         <h2 style="margin-top:40px;">등록된 업무 목록</h2>
         <table>

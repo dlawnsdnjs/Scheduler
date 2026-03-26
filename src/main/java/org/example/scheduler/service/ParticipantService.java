@@ -43,8 +43,8 @@ public class ParticipantService {
     }
 
     @Transactional
-    public void addAvailabilityRule(Long participantId, String ruleType) {
+    public void addAvailabilityRule(Long participantId, String ruleType, String ruleValue) {
         Participant p = findById(participantId);
-        p.addAvailabilityRule(ruleType);
+        p.addAvailabilityRule(ruleType, ruleValue);
     }
 }

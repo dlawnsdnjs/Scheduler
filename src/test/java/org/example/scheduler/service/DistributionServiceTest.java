@@ -46,7 +46,7 @@ class DistributionServiceTest {
         Participant p3 = new Participant("이영희", LocalDate.of(2024, 1, 1));
         
         // 이영희는 짝수일만 가능하게 설정
-        p3.addAvailabilityRule("EVEN_DAYS");
+        p3.addAvailabilityRule("EVEN_DAYS", null);
 
         participantRepository.saveAll(List.of(p1, p2, p3));
     }

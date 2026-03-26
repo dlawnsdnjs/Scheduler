@@ -153,8 +153,8 @@ public class WebController {
     }
 
     @PostMapping("/participants/addRule")
-    public String addAvailabilityRule(Long participantId, String ruleType) {
-        participantService.addAvailabilityRule(participantId, ruleType);
+    public String addAvailabilityRule(Long participantId, String ruleType, String ruleValue) {
+        participantService.addAvailabilityRule(participantId, ruleType, ruleValue);
         return "redirect:/participants/detail?id=" + participantId;
     }
 
