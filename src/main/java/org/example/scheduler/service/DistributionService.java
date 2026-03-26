@@ -34,18 +34,26 @@ public class DistributionService {
         TaskDefinition task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found"));
 
-        // 1. 기존 자동 배정 일정 삭제 및 통계 원복
         List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetweenAndStatus(taskId, start, end, AssignmentStatus.AUTOMATIC);
-        for (ScheduleAssignment a : toDelete) {
-            Participant p = participantRepository.findById(a.getParticipantId()).get();
-            p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - 1));
+        List<Participant> allowedParticipants = task.getAllowedParticipants();
+
+        // 1. 통계 원복: 배정 삭제 전, 각 참여자의 횟수와 마지막 날짜를 start 이전 상태로 되돌림
+        for (Participant p : allowedParticipants) {
+            long deletedCount = toDelete.stream().filter(a -> a.getParticipantId().equals(p.getId())).count();
+            p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - (int)deletedCount));
+
+            LocalDate lastDate = assignmentRepository.findByTaskIdAndAssignedDateBefore(taskId, start).stream()
+                    .filter(a -> a.getParticipantId().equals(p.getId()))
+                    .map(ScheduleAssignment::getAssignedDate)
+                    .max(LocalDate::compareTo)
+                    .orElse(LocalDate.MIN);
+            p.getTaskLastAssignedDates().put(taskId, lastDate);
             participantRepository.save(p);
         }
         assignmentRepository.deleteAll(toDelete);
 
         // 2. 해당 기간의 모든 수행일 리스트 생성
         List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
-        List<Participant> allowedParticipants = task.getAllowedParticipants();
         
         // 3. 참여자별 전체 가용 날짜 수 계산
         Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
