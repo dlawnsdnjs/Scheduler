@@ -2,7 +2,9 @@ package org.example.scheduler.service;
 
 import lombok.RequiredArgsConstructor;
 import org.example.scheduler.domain.Participant;
+import org.example.scheduler.repository.AvailabilityRuleRepository;
 import org.example.scheduler.repository.ParticipantRepository;
+import org.example.scheduler.repository.UnavailableRangeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +16,8 @@ import java.util.List;
 public class ParticipantService {
 
     private final ParticipantRepository participantRepository;
+    private final UnavailableRangeRepository rangeRepository;
+    private final AvailabilityRuleRepository ruleRepository;
 
     @Transactional(readOnly = true)
     public List<Participant> findAll() {
@@ -43,8 +47,18 @@ public class ParticipantService {
     }
 
     @Transactional
+    public void deleteUnavailableRange(Long id) {
+        rangeRepository.deleteById(id);
+    }
+
+    @Transactional
     public void addAvailabilityRule(Long participantId, String ruleType, String ruleValue) {
         Participant p = findById(participantId);
         p.addAvailabilityRule(ruleType, ruleValue);
+    }
+
+    @Transactional
+    public void deleteAvailabilityRule(Long id) {
+        ruleRepository.deleteById(id);
     }
 }

@@ -164,6 +164,18 @@ public class WebController {
         return "redirect:/participants/detail?id=" + participantId;
     }
 
+    @PostMapping("/participants/deleteRange")
+    public String deleteUnavailableRange(Long id, Long participantId) {
+        participantService.deleteUnavailableRange(id);
+        return "redirect:/participants/detail?id=" + participantId;
+    }
+
+    @PostMapping("/participants/deleteRule")
+    public String deleteAvailabilityRule(Long id, Long participantId) {
+        participantService.deleteAvailabilityRule(id);
+        return "redirect:/participants/detail?id=" + participantId;
+    }
+
     // --- 일정 분배 실행 ---
     @GetMapping("/distribute")
     public String distributePage(Model model) {

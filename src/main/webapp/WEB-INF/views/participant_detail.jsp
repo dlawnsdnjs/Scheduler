@@ -40,7 +40,14 @@
             <h4>현재 설정된 기간</h4>
             <ul>
                 <c:forEach var="range" items="${p.unavailableRanges}">
-                    <li>${range.startDate} ~ ${range.endDate}</li>
+                    <li>
+                        ${range.startDate} ~ ${range.endDate}
+                        <form action="/participants/deleteRange" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="${range.id}">
+                            <input type="hidden" name="participantId" value="${p.id}">
+                            <button type="submit" class="btn" style="background:#dc3545; padding: 2px 8px; font-size: 0.8em;">삭제</button>
+                        </form>
+                    </li>
                 </c:forEach>
                 <c:if test="${empty p.unavailableRanges}"><li>등록된 기간이 없습니다.</li></c:if>
             </ul>
@@ -92,6 +99,11 @@
                                 <c:otherwise>${rule.ruleType}</c:otherwise>
                             </c:choose>
                         </span>
+                        <form action="/participants/deleteRule" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="${rule.id}">
+                            <input type="hidden" name="participantId" value="${p.id}">
+                            <button type="submit" class="btn" style="background:#dc3545; padding: 2px 8px; font-size: 0.8em;">삭제</button>
+                        </form>
                     </li>
                 </c:forEach>
                 <c:if test="${empty p.availabilityRules}"><li>등록된 규칙이 없습니다. (모든 날짜 가용)</li></c:if>
