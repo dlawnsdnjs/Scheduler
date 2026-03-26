@@ -39,6 +39,8 @@
         
         /* 수동 배정 폼 */
         .manual-form { margin-top: 5px; font-size: 0.8em; display: none; background: #fff; border: 1px solid #ddd; padding: 5px; border-radius: 4px; }
+        .add-btn { background: #e7f3ff; color: #1877f2; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 1.1em; padding: 0 6px; line-height: 1; vertical-align: middle; }
+        .add-btn:hover { background: #d0e7ff; }
 
         .btn { display: inline-block; padding: 8px 16px; background: #1877f2; color: #fff; text-decoration: none; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; }
         .btn:hover { background: #166fe5; }
@@ -111,7 +113,10 @@
                         <c:forEach var="day" items="${week}">
                             <td>
                                 <c:if test="${day != null}">
-                                    <span class="date-num">${day.dayOfMonth}</span>
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
+                                        <span class="date-num">${day.dayOfMonth}</span>
+                                        <button class="add-btn" onclick="toggleManualForm('add_form_${day.dayOfMonth}')" title="일정 추가">+</button>
+                                    </div>
                                     
                                     <c:forEach var="assign" items="${assignmentsMap[day]}">
                                         <div class="assignment" style="background-color: ${empty assign.taskColor ? '#007bff' : assign.taskColor}">
@@ -151,6 +156,30 @@
                                             </div>
                                         </div>
                                     </c:forEach>
+
+                                    <!-- 일정 추가 폼 -->
+                                    <div id="add_form_${day.dayOfMonth}" class="manual-form" style="border: 1px solid #1877f2; margin-top: 5px;">
+                                        <form action="/assignments/add" method="post">
+                                            <input type="hidden" name="date" value="${day}">
+                                            <input type="hidden" name="year" value="${year}">
+                                            <input type="hidden" name="month" value="${month}">
+                                            
+                                            <select name="taskId" style="width:100%; margin-bottom:3px; font-size:0.85em;" required>
+                                                <option value="">업무 선택...</option>
+                                                <c:forEach var="t" items="${tasks}">
+                                                    <option value="${t.id}">${t.taskName}</option>
+                                                </c:forEach>
+                                            </select>
+                                            
+                                            <select name="participantId" style="width:100%; margin-bottom:3px; font-size:0.85em;" required>
+                                                <option value="">참여자 선택...</option>
+                                                <c:forEach var="p" items="${participants}">
+                                                    <option value="${p.id}">${p.name}</option>
+                                                </c:forEach>
+                                            </select>
+                                            <button type="submit" class="btn" style="width:100%; padding:2px; font-size:0.8em;">추가</button>
+                                        </form>
+                                    </div>
                                 </c:if>
                             </td>
                         </c:forEach>

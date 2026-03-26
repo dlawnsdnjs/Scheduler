@@ -87,6 +87,12 @@ public class WebController {
         return "redirect:/?year=" + year + "&month=" + month;
     }
 
+    @PostMapping("/assignments/add")
+    public String addManualAssignment(Long taskId, String date, Long participantId, int year, int month) {
+        distributionService.addManualAssignment(taskId, LocalDate.parse(date), participantId);
+        return "redirect:/?year=" + year + "&month=" + month;
+    }
+
     // --- 업무 관리 ---
     @GetMapping("/tasks")
     public String tasks(Model model) {

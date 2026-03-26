@@ -124,6 +124,23 @@ public class DistributionService {
     }
 
     @Transactional
+    public void addManualAssignment(Long taskId, LocalDate date, Long participantId) {
+        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
+        boolean duplicate = existing.stream().anyMatch(a -> a.getParticipantId().equals(participantId));
+        
+        if (duplicate) {
+            return;
+        }
+
+        ScheduleAssignment assignment = new ScheduleAssignment(taskId, date, participantId);
+        assignment.setStatus(AssignmentStatus.MANUAL_FIXED);
+        assignmentRepository.save(assignment);
+
+        Participant p = participantRepository.findById(participantId).get();
+        p.incrementTaskCount(taskId, date);
+    }
+
+    @Transactional
     public void manualAssign(Long taskId, LocalDate date, Long participantId) {
         List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
         assignmentRepository.deleteAll(existing);
