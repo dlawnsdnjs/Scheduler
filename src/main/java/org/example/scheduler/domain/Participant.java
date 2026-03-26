@@ -116,8 +116,10 @@ public class Participant {
                     String[] parts = rule.getRuleValue().split(":");
                     LocalDate baseDate = LocalDate.parse(parts[0]);
                     int cycle = Integer.parseInt(parts[1]);
+                    // 기준일로부터의 일수 차이 (음수 포함)
                     long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(baseDate, date);
-                    return daysBetween >= 0 && daysBetween % cycle == 0;
+                    // Math.floorMod를 사용하여 음수일 때도 정확한 나머지(나머지 0이면 가용일) 계산
+                    return Math.floorMod(daysBetween, cycle) == 0;
                 } catch (Exception e) {
                     return false;
                 }
