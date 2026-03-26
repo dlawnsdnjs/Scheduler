@@ -108,6 +108,12 @@ public class WebController {
         return "redirect:/tasks";
     }
 
+    @PostMapping("/tasks/update")
+    public String updateTask(Long taskId, String taskName, String cycleType, String cycleValue, int requiredParticipantsPerDay, String color) {
+        taskService.updateTask(taskId, taskName, cycleType, cycleValue, requiredParticipantsPerDay, color);
+        return "redirect:/tasks";
+    }
+
     @PostMapping("/tasks/delete")
     public String deleteTask(Long taskId) {
         taskService.deleteTask(taskId);

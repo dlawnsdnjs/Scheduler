@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.scheduler.domain.Participant;
 import org.example.scheduler.domain.TaskDefinition;
 import org.example.scheduler.repository.ParticipantRepository;
+import org.example.scheduler.repository.ScheduleAssignmentRepository;
 import org.example.scheduler.repository.TaskDefinitionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ public class TaskService {
 
     private final TaskDefinitionRepository taskRepository;
     private final ParticipantRepository participantRepository;
+    private final ScheduleAssignmentRepository assignmentRepository;
 
     @Transactional(readOnly = true)
     public List<TaskDefinition> findAll() {
@@ -41,6 +43,7 @@ public class TaskService {
 
     @Transactional
     public void deleteTask(Long id) {
+        assignmentRepository.deleteAll(assignmentRepository.findByTaskId(id));
         taskRepository.deleteById(id);
     }
 
@@ -53,14 +56,25 @@ public class TaskService {
             task.setAllowedParticipants(participantRepository.findAllById(participantIds));
         }
     }
+@Transactional
+public void updateTask(Long taskId, String name, String cycleType, String cycleValue, int required, String color) {
+    TaskDefinition task = findById(taskId);
+    task.setTaskName(name);
+    task.setCycleType(cycleType);
+    task.setCycleValue(cycleValue);
+    task.setRequiredParticipantsPerDay(required);
+    task.setColor(color);
+}
 
-    @Transactional
-    public void updateConflicts(Long taskId, List<Long> conflictTaskIds) {
-        TaskDefinition task = findById(taskId);
-        if (conflictTaskIds == null) {
-            task.setConflictingTasks(new ArrayList<>());
-        } else {
-            task.setConflictingTasks(taskRepository.findAllById(conflictTaskIds));
-        }
+@Transactional
+public void updateConflicts(Long taskId, List<Long> conflictTaskIds) {
+
+    TaskDefinition task = findById(taskId);
+    if (conflictTaskIds == null) {
+        task.setConflictingTasks(new ArrayList<>());
+    } else {
+        task.setConflictingTasks(taskRepository.findAllById(conflictTaskIds));
     }
 }
+}
+

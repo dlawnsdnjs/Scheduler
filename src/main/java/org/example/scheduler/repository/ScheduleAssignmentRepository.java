@@ -9,6 +9,7 @@ import java.util.List;
 
 @Repository
 public interface ScheduleAssignmentRepository extends JpaRepository<ScheduleAssignment, Long> {
+    List<ScheduleAssignment> findByTaskId(Long taskId);
     List<ScheduleAssignment> findByTaskIdAndAssignedDateBetween(Long taskId, LocalDate start, LocalDate end);
     List<ScheduleAssignment> findByAssignedDateBetween(LocalDate start, LocalDate end);
     void deleteByTaskIdAndAssignedDateBetweenAndStatus(Long taskId, LocalDate start, LocalDate end, org.example.scheduler.domain.AssignmentStatus status);

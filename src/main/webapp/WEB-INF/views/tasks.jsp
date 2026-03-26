@@ -20,7 +20,7 @@
         .participant-list { border: 1px solid #ddd; padding: 10px; max-height: 120px; overflow-y: auto; background: #fafafa; }
         .participant-item { display: inline-block; margin-right: 10px; margin-bottom: 5px; font-size: 0.85em; }
         .participant-item input { width: auto; vertical-align: middle; }
-        .edit-section { background: #fdfdfe; border: 1px solid #eee; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 0.9em; }
+        .edit-section { background: #fdfdfe; border: 1px solid #eee; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 0.9em; display: none; }
     </style>
 </head>
 <body>
@@ -38,14 +38,14 @@
                     </div>
                     <div class="form-group">
                         <label>주기 유형:</label>
-                        <select name="cycleType">
+                        <select name="cycleType" class="cycle-type-select">
                             <option value="WEEKLY">요일 지정 (WEEKLY)</option>
                             <option value="INTERVAL">N일 간격 (INTERVAL)</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label>주기 값:</label>
-                        <div id="weeklyCycle" style="display:block; border: 1px solid #ddd; padding: 5px; background: #fff;">
+                        <div class="weekly-cycle-div" style="display:block; border: 1px solid #ddd; padding: 5px; background: #fff;">
                             <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="월" style="width:auto;"> 월</label>
                             <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="화" style="width:auto;"> 화</label>
                             <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="수" style="width:auto;"> 수</label>
@@ -54,8 +54,8 @@
                             <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="토" style="width:auto;"> 토</label>
                             <label style="display:inline-block; margin-right:5px; font-weight:normal;"><input type="checkbox" class="day-checkbox" value="일" style="width:auto;"> 일</label>
                         </div>
-                        <input type="text" id="intervalCycle" placeholder="예: 2" style="display:none;">
-                        <input type="hidden" name="cycleValue" id="cycleValue" required>
+                        <input type="text" class="interval-cycle-input" placeholder="예: 2" style="display:none;">
+                        <input type="hidden" name="cycleValue" class="cycle-value-input" required>
                     </div>
                 </div>
                 <div style="flex:1;">
@@ -80,48 +80,14 @@
                     </div>
                 </div>
             </div>
-            <button type="submit" class="btn" id="submitBtn" style="background:#28a745; width:100%; padding:12px;">등록하기</button>
+            <button type="submit" class="btn" style="background:#28a745; width:100%; padding:12px;">등록하기</button>
         </form>
-
-        <script>
-            const cycleTypeSelect = document.querySelector('select[name="cycleType"]');
-            const weeklyCycleDiv = document.getElementById('weeklyCycle');
-            const intervalCycleInput = document.getElementById('intervalCycle');
-            
-            cycleTypeSelect.addEventListener('change', function() {
-                if (this.value === 'WEEKLY') {
-                    weeklyCycleDiv.style.display = 'block';
-                    intervalCycleInput.style.display = 'none';
-                } else {
-                    weeklyCycleDiv.style.display = 'none';
-                    intervalCycleInput.style.display = 'block';
-                }
-            });
-
-            document.querySelector('form[action="/tasks/add"]').addEventListener('submit', function(e) {
-                const type = cycleTypeSelect.value;
-                let val = '';
-                if (type === 'WEEKLY') {
-                    const checked = Array.from(document.querySelectorAll('.day-checkbox:checked')).map(cb => cb.value);
-                    val = checked.join(',');
-                } else {
-                    val = intervalCycleInput.value;
-                }
-                
-                if (!val) {
-                    alert('주기 값을 입력하거나 선택하세요.');
-                    e.preventDefault();
-                    return;
-                }
-                document.getElementById('cycleValue').value = val;
-            });
-        </script>
 
         <h2 style="margin-top:40px;">등록된 업무 목록</h2>
         <table>
             <thead>
                 <tr>
-                    <th width="150">업무 정보</th><th>참여자 관리</th><th>충돌 업무 관리</th><th>관리</th>
+                    <th width="200">업무 정보</th><th>참여자 관리</th><th>충돌 업무 관리</th><th>관리</th>
                 </tr>
             </thead>
             <tbody>
@@ -132,6 +98,22 @@
                                 <strong>${task.taskName}</strong><br>
                                 <small>${task.cycleType}: ${task.cycleValue}</small><br>
                                 <small>필요: ${task.requiredParticipantsPerDay}명</small>
+                            </div>
+                            <button type="button" class="btn" style="padding:2px 5px; font-size:0.7em; margin-top:5px;" onclick="document.getElementById('edit_${task.id}').style.display='block'">수정</button>
+                            <div id="edit_${task.id}" class="edit-section">
+                                <form action="/tasks/update" method="post">
+                                    <input type="hidden" name="taskId" value="${task.id}">
+                                    <input type="text" name="taskName" value="${task.taskName}" required><br>
+                                    <select name="cycleType" class="cycle-type-select">
+                                        <option value="WEEKLY" ${task.cycleType == 'WEEKLY' ? 'selected' : ''}>WEEKLY</option>
+                                        <option value="INTERVAL" ${task.cycleType == 'INTERVAL' ? 'selected' : ''}>INTERVAL</option>
+                                    </select>
+                                    <input type="hidden" name="cycleValue" class="cycle-value-input" value="${task.cycleValue}">
+                                    <input type="number" name="requiredParticipantsPerDay" value="${task.requiredParticipantsPerDay}">
+                                    <input type="color" name="color" value="${task.color}">
+                                    <button type="submit" class="btn" style="background:#28a745;">저장</button>
+                                    <button type="button" class="btn" style="background:#6c757d;" onclick="this.parentElement.parentElement.style.display='none'">취소</button>
+                                </form>
                             </div>
                         </td>
                         <td>
@@ -183,5 +165,36 @@
             </tbody>
         </table>
     </div>
+
+    <script>
+        document.querySelectorAll('.cycle-type-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const parent = this.closest('form');
+                const weekly = parent.querySelector('.weekly-cycle-div');
+                const interval = parent.querySelector('.interval-cycle-input');
+                if (weekly && interval) {
+                    if (this.value === 'WEEKLY') { weekly.style.display = 'block'; interval.style.display = 'none'; }
+                    else { weekly.style.display = 'none'; interval.style.display = 'block'; }
+                }
+            });
+        });
+
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                const type = form.querySelector('.cycle-type-select');
+                if(!type) return;
+                const weekly = form.querySelector('.weekly-cycle-div');
+                const interval = form.querySelector('.interval-cycle-input');
+                const valInput = form.querySelector('.cycle-value-input');
+                
+                if (type.value === 'WEEKLY') {
+                    const checked = Array.from(weekly.querySelectorAll('.day-checkbox:checked')).map(cb => cb.value);
+                    valInput.value = checked.join(',');
+                } else {
+                    valInput.value = interval.value;
+                }
+            });
+        });
+    </script>
 </body>
 </html>

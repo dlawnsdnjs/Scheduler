@@ -116,6 +116,11 @@ public class DistributionService {
                 .stream().collect(Collectors.toMap(Participant::getId, p -> p));
 
         Map<LocalDate, List<CalendarAssignmentDto.AssignmentDetailDto>> grouped = assignments.stream()
+                .filter(a -> {
+                    TaskDefinition t = tasks.get(a.getTaskId());
+                    Participant p = participants.get(a.getParticipantId());
+                    return t != null && p != null; // 유효한 데이터만 필터링
+                })
                 .collect(Collectors.groupingBy(
                         ScheduleAssignment::getAssignedDate,
                         Collectors.mapping(a -> {

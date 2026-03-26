@@ -22,7 +22,9 @@ public class DataMigrationService {
     private final ParticipantRepository participantRepository;
     private final ScheduleAssignmentRepository assignmentRepository;
     private final TaskDefinitionRepository taskRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    private final ObjectMapper objectMapper = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .configure(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
     @Transactional(readOnly = true)
     public String exportFullDataJson(LocalDate start, LocalDate end) {
