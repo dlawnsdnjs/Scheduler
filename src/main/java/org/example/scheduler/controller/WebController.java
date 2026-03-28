@@ -70,16 +70,21 @@ public class WebController {
         model.addAttribute("filterTaskId", filterTaskId);
         model.addAttribute("filterParticipantId", filterParticipantId);
 
-        // 업무별 사이클 현황 데이터 (다음 순번 예측용)
+        // 업무별 사이클 현황 데이터 (JSP 호환성을 위해 DTO 리스트로 변환)
         List<org.example.scheduler.domain.TaskDefinition> allTasks = taskService.findAll();
-        Map<Long, List<org.example.scheduler.domain.Participant>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
+        Map<Long, List<org.example.scheduler.dto.ParticipantStatsDto>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
                 org.example.scheduler.domain.TaskDefinition::getId,
-                task -> {
-                    List<org.example.scheduler.domain.Participant> participants = new ArrayList<>(task.getAllowedParticipants());
-                    participants.sort(java.util.Comparator.comparing((org.example.scheduler.domain.Participant p) -> p.getLastDate(task.getId()))
-                            .thenComparing(p -> p.getTaskCount(task.getId())));
-                    return participants;
-                }
+                task -> task.getAllowedParticipants().stream()
+                        .map(p -> {
+                            org.example.scheduler.dto.ParticipantStatsDto dto = new org.example.scheduler.dto.ParticipantStatsDto();
+                            dto.setName(p.getName());
+                            dto.setCount(p.getTaskCount(task.getId()));
+                            dto.setLastDate(p.getLastDate(task.getId()));
+                            return dto;
+                        })
+                        .sorted(java.util.Comparator.comparing((org.example.scheduler.dto.ParticipantStatsDto d) -> d.getLastDate())
+                                .thenComparing(org.example.scheduler.dto.ParticipantStatsDto::getCount))
+                        .collect(Collectors.toList())
         ));
         model.addAttribute("taskCycleStats", taskCycleStats);
 

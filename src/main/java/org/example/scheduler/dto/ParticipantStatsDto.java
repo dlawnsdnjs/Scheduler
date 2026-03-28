@@ -14,4 +14,15 @@ public class ParticipantStatsDto {
     private String name;
     private Map<Long, Integer> taskTotalCounts;
     private Map<Long, LocalDate> taskLastAssignedDates;
+
+    // 대시보드 표시용 추가 필드
+    private Long taskId;
+    private int count;
+    private LocalDate lastDate;
+
+    public ParticipantStatsDto(String name, Map<Long, Integer> taskTotalCounts, Map<Long, LocalDate> taskLastAssignedDates) {
+        this.name = name;
+        this.taskTotalCounts = taskTotalCounts;
+        this.taskLastAssignedDates = taskLastAssignedDates;
+    }
 }

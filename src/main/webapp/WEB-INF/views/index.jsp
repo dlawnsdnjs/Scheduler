@@ -76,18 +76,17 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <c:forEach var="p" items="${taskCycleStats[task.id]}">
-                                    <c:set var="lastDate" value="${p.getLastDate(task.id)}" />
+                                <c:forEach var="stat" items="${taskCycleStats[task.id]}">
                                     <tr>
-                                        <td style="height: auto; padding: 5px; border: 1px solid #eee;">${p.name}</td>
-                                        <td style="height: auto; padding: 5px; border: 1px solid #eee; text-align: center;">${p.getTaskCount(task.id)}</td>
+                                        <td style="height: auto; padding: 5px; border: 1px solid #eee;">${stat.name}</td>
+                                        <td style="height: auto; padding: 5px; border: 1px solid #eee; text-align: center;">${stat.count}</td>
                                         <td style="height: auto; padding: 5px; border: 1px solid #eee; text-align: center;">
                                             <c:choose>
-                                                <c:when test="${lastDate.year < 0}">
+                                                <c:when test="${stat.lastDate == null || stat.lastDate.year < 0}">
                                                     -
                                                 </c:when>
                                                 <otherwise>
-                                                    ${lastDate}
+                                                    ${stat.lastDate}
                                                 </otherwise>
                                             </c:choose>
                                         </td>
