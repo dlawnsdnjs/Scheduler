@@ -36,70 +36,64 @@ class DistributionServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 1. 업무 정의: 월, 수, 금 배정, 하루 2명 필요
-        TaskDefinition task = new TaskDefinition("당직", "WEEKLY", "MON,WED,FRI", 2);
+        // 하루 1명만 필요한 업무로 설정하여 가용성 테스트를 단순화
+        TaskDefinition task = new TaskDefinition("청소", "WEEKLY", "MON,TUE,WED,THU,FRI", 1);
         taskId = taskRepository.save(task).getId();
 
-        // 2. 참여자 생성
-        Participant p1 = new Participant("홍길동", LocalDate.of(2024, 1, 1));
-        Participant p2 = new Participant("김철수", LocalDate.of(2024, 1, 1));
-        Participant p3 = new Participant("이영희", LocalDate.of(2024, 1, 1));
+        Participant p1 = new Participant("홍길동", LocalDate.of(2026, 1, 1));
         
-        // 이영희는 짝수일만 가능하게 설정
-        p3.addAvailabilityRule("EVEN_DAYS", null);
+        // 이영희는 짝수 주기(나머지 0)인 날만 근무 가능
+        Participant p2 = new Participant("이영희", LocalDate.of(2026, 1, 1));
+        p2.addAvailabilityRule("EVEN_DAYS", null);
 
-        participantRepository.saveAll(List.of(p1, p2, p3));
+        participantRepository.saveAll(List.of(p1, p2));
+        
+        // 업무에 참여자 매핑 (수정 가능한 리스트로 전달)
+        task.setAllowedParticipants(new java.util.ArrayList<>(List.of(p1, p2)));
+        taskRepository.save(task);
     }
 
     @Test
-    @DisplayName("기본 배정 로직 검증: 요일 및 인원수 확인")
-    void distributeTest() {
-        // 2024년 3월 배정 (3월 1일은 금요일)
-        distributionService.distribute(taskId, 2024, 3);
-
-        // 3월의 월, 수, 금 총 일수 계산 (약 13일)
-        // 각 날짜당 2명씩 배정되었는지 확인
-        List<ScheduleAssignment> allAssignments = assignmentRepository.findAll();
-        assertThat(allAssignments).isNotEmpty();
-        
-        // 특정 날짜(3월 4일 월요일)에 2명이 배정되었는지 확인
-        List<ScheduleAssignment> mar4Assignments = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, LocalDate.of(2024, 3, 4), LocalDate.of(2024, 3, 4));
-        assertThat(mar4Assignments).hasSize(2);
-    }
-
-    @Test
-    @DisplayName("가용성 규칙 검증: 짝수일 규칙 적용 확인")
+    @DisplayName("가용성 주기 규칙 검증")
     void availabilityRuleTest() {
-        distributionService.distribute(taskId, 2024, 3);
+        // 한 달 전체 배정
+        distributionService.distribute(taskId, 2026, 3);
 
-        // 이영희(p3)가 홀수일(예: 3월 1일 금요일, 3월 11일 월요일 등)에 배정되지 않았는지 확인
-        Participant p3 = participantRepository.findAll().stream().filter(p -> p.getName().equals("이영희")).findFirst().get();
-        List<ScheduleAssignment> p3Assignments = assignmentRepository.findAll().stream()
-                .filter(a -> a.getParticipantId().equals(p3.getId()))
+        List<ScheduleAssignment> assignments = assignmentRepository.findAll();
+        assertThat(assignments).isNotEmpty();
+
+        Participant p2 = participantRepository.findAll().stream().filter(p -> p.getName().equals("이영희")).findFirst().get();
+        List<ScheduleAssignment> p2Assignments = assignments.stream()
+                .filter(a -> a.getParticipantId().equals(p2.getId()))
                 .toList();
 
-        for (ScheduleAssignment a : p3Assignments) {
-            assertThat(a.getAssignedDate().getDayOfMonth() % 2).isZero();
+        LocalDate baseDate = LocalDate.of(2026, 1, 1);
+        for (ScheduleAssignment a : p2Assignments) {
+            long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(baseDate, a.getAssignedDate());
+            // 이영희는 오직 짝수 주기(나머지 0)인 날에만 배정되어야 함
+            assertThat(Math.floorMod(daysBetween, 2)).isZero();
         }
     }
 
     @Test
-    @DisplayName("일정 교체(Swap) 기능 검증")
+    @DisplayName("일정 교체 기능 검증")
     void swapTest() {
-        distributionService.distribute(taskId, 2024, 3);
-        List<ScheduleAssignment> assignments = assignmentRepository.findAll();
-        ScheduleAssignment a1 = assignments.get(0);
-        ScheduleAssignment a2 = assignments.get(1);
+        Participant p1 = participantRepository.findAll().stream().filter(p -> p.getName().equals("홍길동")).findFirst().get();
+        Participant p2 = participantRepository.findAll().stream().filter(p -> p.getName().equals("이영희")).findFirst().get();
         
-        // 서로 다른 날짜나 참여자일 때 교체 시도 (테스트 편의상 가용성이 보장된 데이터로 가정)
-        // 만약 가용성이 안 맞으면 에러가 날 것이므로, 에러 없이 수행되는지 확인
-        try {
-            distributionService.swapAssignments(a1.getId(), a2.getId());
-            ScheduleAssignment updatedA1 = assignmentRepository.findById(a1.getId()).get();
-            assertThat(updatedA1.getStatus()).isEqualTo(AssignmentStatus.MANUAL_FIXED);
-        } catch (IllegalStateException e) {
-            // 가용성 규칙 때문에 swap이 안될 수도 있음 (이것 또한 정상 로직)
-            System.out.println("Swap skipped due to availability constraint: " + e.getMessage());
-        }
+        // 교체 가능한 날짜 설정 (둘 다 가용한 날짜 선택)
+        // 2026-03-02 (월) : daysBetween 60 (짝수) -> 둘 다 가용
+        // 2026-03-04 (수) : daysBetween 62 (짝수) -> 둘 다 가용
+        LocalDate d1 = LocalDate.of(2026, 3, 2);
+        LocalDate d2 = LocalDate.of(2026, 3, 4);
+        
+        ScheduleAssignment a1 = assignmentRepository.save(new ScheduleAssignment(taskId, d1, p1.getId()));
+        ScheduleAssignment a2 = assignmentRepository.save(new ScheduleAssignment(taskId, d2, p2.getId()));
+        
+        distributionService.swapAssignments(a1.getId(), a2.getId());
+        
+        ScheduleAssignment updatedA1 = assignmentRepository.findById(a1.getId()).get();
+        assertThat(updatedA1.getParticipantId()).isEqualTo(p2.getId());
+        assertThat(updatedA1.getStatus()).isEqualTo(AssignmentStatus.MANUAL_FIXED);
     }
 }

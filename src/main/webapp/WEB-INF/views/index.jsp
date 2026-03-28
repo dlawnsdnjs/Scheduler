@@ -57,6 +57,49 @@
             <a href="/stats/manage">데이터 백업/복구</a>
         </div>
 
+        <!-- 업무별 사이클 현황 -->
+        <div class="cycle-status-section" style="margin-bottom: 30px; background: #fff; border: 1px solid #e1e4e8; border-radius: 8px; padding: 15px;">
+            <h3 style="margin-top: 0; color: #1877f2; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px;">업무별 사이클 현황 (다음 배정 우선순위)</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <c:forEach var="task" items="${tasks}">
+                    <div style="flex: 1; min-width: 280px; border: 1px solid #eee; border-radius: 6px; padding: 10px;">
+                        <h4 style="margin: 0 0 10px 0; display: flex; align-items: center; gap: 8px;">
+                            <div class="color-box" style="background-color: ${empty task.color ? '#666' : task.color}"></div>
+                            ${task.taskName}
+                        </h4>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.85em; height: auto;">
+                            <thead style="background: #f8f9fa;">
+                                <tr>
+                                    <th style="height: auto; padding: 5px; text-align: left;">이름</th>
+                                    <th style="height: auto; padding: 5px; text-align: center;">횟수</th>
+                                    <th style="height: auto; padding: 5px; text-align: center;">마지막 배정일</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <c:forEach var="p" items="${taskCycleStats[task.id]}">
+                                    <c:set var="lastDate" value="${p.getLastDate(task.id)}" />
+                                    <tr>
+                                        <td style="height: auto; padding: 5px; border: 1px solid #eee;">${p.name}</td>
+                                        <td style="height: auto; padding: 5px; border: 1px solid #eee; text-align: center;">${p.getTaskCount(task.id)}</td>
+                                        <td style="height: auto; padding: 5px; border: 1px solid #eee; text-align: center;">
+                                            <c:choose>
+                                                <c:when test="${lastDate.year < 0}">
+                                                    -
+                                                </c:when>
+                                                <otherwise>
+                                                    ${lastDate}
+                                                </otherwise>
+                                            </c:choose>
+                                        </td>
+                                    </tr>
+                                </c:forEach>
+                            </tbody>
+                        </table>
+                    </div>
+                </c:forEach>
+            </div>
+        </div>
+
         <!-- 범례 (Legend) -->
         <div class="legend">
             <c:forEach var="t" items="${tasks}">

@@ -70,6 +70,19 @@ public class WebController {
         model.addAttribute("filterTaskId", filterTaskId);
         model.addAttribute("filterParticipantId", filterParticipantId);
 
+        // 업무별 사이클 현황 데이터 (다음 순번 예측용)
+        List<org.example.scheduler.domain.TaskDefinition> allTasks = taskService.findAll();
+        Map<Long, List<org.example.scheduler.domain.Participant>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
+                org.example.scheduler.domain.TaskDefinition::getId,
+                task -> {
+                    List<org.example.scheduler.domain.Participant> participants = new ArrayList<>(task.getAllowedParticipants());
+                    participants.sort(java.util.Comparator.comparing((org.example.scheduler.domain.Participant p) -> p.getLastDate(task.getId()))
+                            .thenComparing(p -> p.getTaskCount(task.getId())));
+                    return participants;
+                }
+        ));
+        model.addAttribute("taskCycleStats", taskCycleStats);
+
         LocalDate currentMonth = LocalDate.of(targetYear, targetMonth, 1);
         LocalDate prev = currentMonth.minusMonths(1);
         LocalDate next = currentMonth.plusMonths(1);
