@@ -36,8 +36,11 @@ public class DistributionService {
 
         List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetweenAndStatus(taskId, start, end, AssignmentStatus.AUTOMATIC);
         List<Participant> allowedParticipants = task.getAllowedParticipants();
+        int cycleSize = allowedParticipants.size();
 
-        // 1. 통계 원복: 배정 삭제 전, 각 참여자의 횟수와 마지막 날짜를 start 이전 상태로 되돌림
+        if (cycleSize == 0) return;
+
+        // 1. 통계 원복
         for (Participant p : allowedParticipants) {
             long deletedCount = toDelete.stream().filter(a -> a.getParticipantId().equals(p.getId())).count();
             p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - (int)deletedCount));
@@ -52,24 +55,48 @@ public class DistributionService {
         }
         assignmentRepository.deleteAll(toDelete);
 
-        // 2. 해당 기간의 모든 수행일 리스트 생성
+        // 2. 배정 대상 날짜 결정 (사이클 마무리 포함)
         List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
+        int totalSlots = targetDates.size() * task.getRequiredParticipantsPerDay();
         
-        // 3. 참여자별 전체 가용 날짜 수 계산
-        Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
+        // 사이클을 완성하기 위해 필요한 추가 슬롯 계산
+        int extraSlotsNeeded = (cycleSize - (totalSlots % cycleSize)) % cycleSize;
+        
+        List<LocalDate> allDates = new ArrayList<>(targetDates);
+        if (extraSlotsNeeded > 0) {
+            LocalDate searchStart = end.plusDays(1);
+            while (extraSlotsNeeded > 0) {
+                // 한 달씩 더해가며 필요한 만큼의 날짜 확보
+                List<LocalDate> nextMonthDates = distributionEngine.getTargetDates(task, searchStart, searchStart.plusMonths(1));
+                if (nextMonthDates.isEmpty()) break; // 무한루프 방지
+                
+                for (LocalDate d : nextMonthDates) {
+                    if (extraSlotsNeeded <= 0) break;
+                    allDates.add(d);
+                    extraSlotsNeeded -= task.getRequiredParticipantsPerDay();
+                }
+                searchStart = searchStart.plusMonths(1);
+            }
+        }
 
-        // 4. 난이도 정렬 및 재배정 수행
+        // 3. 참여자별 전체 가용 날짜 수 계산 (확장된 전체 기간 기준)
+        Map<Long, Integer> availableDaysCount = calculateAvailableDays(allDates, allowedParticipants);
+
+        // 4. 난이도 정렬 (확장된 전체 기간 기준)
         Map<LocalDate, Integer> dateDifficultyMap = new HashMap<>();
-        for (LocalDate date : targetDates) {
+        for (LocalDate date : allDates) {
             long possibleCount = allowedParticipants.stream().filter(p -> p.isAvailable(date)).count();
             dateDifficultyMap.put(date, (int) possibleCount);
         }
 
-        List<LocalDate> sortedDates = new ArrayList<>(targetDates);
+        List<LocalDate> sortedDates = new ArrayList<>(allDates);
         sortedDates.sort(Comparator.comparingInt(dateDifficultyMap::get));
 
+        // 5. 배정 수행
         for (LocalDate date : sortedDates) {
-            distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount);
+            // 요청된 기간(start~end) 내의 날짜만 DB에 저장
+            boolean shouldSave = !date.isBefore(start) && !date.isAfter(end);
+            distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, shouldSave);
         }
     }
 
@@ -105,7 +132,7 @@ public class DistributionService {
         List<LocalDate> monthTargetDates = distributionEngine.getTargetDates(task, start, end);
         Map<Long, Integer> availableDaysCount = calculateAvailableDays(monthTargetDates, allowedParticipants);
 
-        distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount);
+        distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, true);
     }
 
     @Transactional(readOnly = true)

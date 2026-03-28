@@ -42,35 +42,38 @@ public class DistributionEngine {
         }
         return dates;
     }
+public void assignForDate(TaskDefinition task, LocalDate date, List<Participant> participants, Map<Long, Integer> availableDaysCount, boolean shouldSave) {
+    List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(task.getId(), date, date);
+    int alreadyAssignedCount = existing.size();
+    int neededCount = task.getRequiredParticipantsPerDay() - alreadyAssignedCount;
 
-    public void assignForDate(TaskDefinition task, LocalDate date, List<Participant> participants, Map<Long, Integer> availableDaysCount) {
-        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(task.getId(), date, date);
-        int neededCount = task.getRequiredParticipantsPerDay() - existing.size();
-        if (neededCount <= 0) return;
+    if (neededCount <= 0) return;
 
-        List<ScheduleAssignment> allDayAssignments = assignmentRepository.findByAssignedDateBetween(date, date);
-        Set<Long> conflictingTaskIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
+    List<ScheduleAssignment> allDayAssignments = assignmentRepository.findByAssignedDateBetween(date, date);
+    Set<Long> conflictingTaskIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
 
-        List<Participant> available = participants.stream()
-                .filter(p -> p.isAvailable(date))
-                .filter(p -> existing.stream().noneMatch(a -> a.getParticipantId().equals(p.getId())))
-                .filter(p -> allDayAssignments.stream()
-                        .filter(a -> a.getParticipantId().equals(p.getId()))
-                        .noneMatch(a -> conflictingTaskIds.contains(a.getTaskId())))
-                .collect(Collectors.toList());
+    List<Participant> available = participants.stream()
+            .filter(p -> p.isAvailable(date))
+            .filter(p -> existing.stream().noneMatch(a -> a.getParticipantId().equals(p.getId())))
+            .filter(p -> allDayAssignments.stream()
+                    .filter(a -> a.getParticipantId().equals(p.getId()))
+                    .noneMatch(a -> conflictingTaskIds.contains(a.getTaskId())))
+            .collect(Collectors.toList());
 
-        available.sort(Comparator.comparingInt((Participant p) -> p.getTaskCount(task.getId()))
-                .thenComparingInt(p -> availableDaysCount.getOrDefault(p.getId(), 0))
-                .thenComparing(p -> p.getLastDate(task.getId())));
+    available.sort(Comparator.comparingInt((Participant p) -> p.getTaskCount(task.getId()))
+            .thenComparingInt(p -> availableDaysCount.getOrDefault(p.getId(), 0))
+            .thenComparing(p -> p.getLastDate(task.getId())));
 
-        for (int i = 0; i < Math.min(neededCount, available.size()); i++) {
-            Participant selected = available.get(i);
-            ScheduleAssignment assignment = new ScheduleAssignment(task.getId(), date, selected.getId());
-            assignment.setStatus(AssignmentStatus.AUTOMATIC);
+    for (int i = 0; i < Math.min(neededCount, available.size()); i++) {
+        Participant selected = available.get(i);
+        ScheduleAssignment assignment = new ScheduleAssignment(task.getId(), date, selected.getId());
+        assignment.setStatus(AssignmentStatus.AUTOMATIC);
+        if (shouldSave) {
             assignmentRepository.save(assignment);
-            selected.incrementTaskCount(task.getId(), date);
         }
+        selected.incrementTaskCount(task.getId(), date);
     }
+}
 
     private DayOfWeek parseKoreanDay(String day) {
         switch (day) {
