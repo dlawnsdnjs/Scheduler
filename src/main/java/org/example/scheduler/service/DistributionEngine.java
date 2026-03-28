@@ -6,6 +6,7 @@ import org.example.scheduler.domain.Participant;
 import org.example.scheduler.domain.ScheduleAssignment;
 import org.example.scheduler.domain.TaskDefinition;
 import org.example.scheduler.repository.ScheduleAssignmentRepository;
+import org.example.scheduler.repository.TaskDefinitionRepository;
 import org.springframework.stereotype.Component;
 
 import java.time.DayOfWeek;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
 public class DistributionEngine {
 
     private final ScheduleAssignmentRepository assignmentRepository;
+    private final TaskDefinitionRepository taskRepository;
 
     public List<LocalDate> getTargetDates(TaskDefinition task, LocalDate start, LocalDate end) {
         List<LocalDate> dates = new ArrayList<>();
@@ -42,38 +44,60 @@ public class DistributionEngine {
         }
         return dates;
     }
-public void assignForDate(TaskDefinition task, LocalDate date, List<Participant> participants, Map<Long, Integer> availableDaysCount, boolean shouldSave) {
-    List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(task.getId(), date, date);
-    int alreadyAssignedCount = existing.size();
-    int neededCount = task.getRequiredParticipantsPerDay() - alreadyAssignedCount;
 
-    if (neededCount <= 0) return;
+    public void assignForDate(TaskDefinition task, LocalDate date, List<Participant> participants, Map<Long, Integer> availableDaysCount, boolean shouldSave) {
+        // 1. 현재 업무에 이미 배정된 정보
+        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(task.getId(), date, date);
+        int neededCount = task.getRequiredParticipantsPerDay() - existing.size();
+        if (neededCount <= 0) return;
 
-    List<ScheduleAssignment> allDayAssignments = assignmentRepository.findByAssignedDateBetween(date, date);
-    Set<Long> conflictingTaskIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
+        // 2. 해당 날짜의 모든 배정 정보 (다른 업무 포함)
+        List<ScheduleAssignment> allDayAssignments = assignmentRepository.findByAssignedDateBetween(date, date);
+        
+        // 3. 충돌 관계 로드 (캐싱을 고려할 수 있으나 우선 정확성을 위해 매번 조회)
+        Set<Long> myConflicts = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
+        List<TaskDefinition> allTasks = taskRepository.findAll();
+        Set<Long> tasksThatConflictWithMe = allTasks.stream()
+                .filter(t -> t.getConflictingTasks().stream().anyMatch(ct -> ct.getId().equals(task.getId())))
+                .map(TaskDefinition::getId)
+                .collect(Collectors.toSet());
 
-    List<Participant> available = participants.stream()
-            .filter(p -> p.isAvailable(date))
-            .filter(p -> existing.stream().noneMatch(a -> a.getParticipantId().equals(p.getId())))
-            .filter(p -> allDayAssignments.stream()
-                    .filter(a -> a.getParticipantId().equals(p.getId()))
-                    .noneMatch(a -> conflictingTaskIds.contains(a.getTaskId())))
-            .collect(Collectors.toList());
+        // 4. 가용 참여자 필터링
+        List<Participant> available = participants.stream()
+                .filter(p -> p.isAvailable(date))
+                .filter(p -> existing.stream().noneMatch(a -> a.getParticipantId().equals(p.getId())))
+                .filter(p -> {
+                    // 당일 이 참여자가 배정된 다른 업무들 확인
+                    List<Long> assignedIds = allDayAssignments.stream()
+                            .filter(a -> a.getParticipantId().equals(p.getId()))
+                            .map(ScheduleAssignment::getTaskId)
+                            .toList();
+                    
+                    for (Long assignedId : assignedIds) {
+                        if (assignedId.equals(task.getId())) continue;
+                        // 양방향 충돌 체크
+                        if (myConflicts.contains(assignedId) || tasksThatConflictWithMe.contains(assignedId)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
 
-    available.sort(Comparator.comparingInt((Participant p) -> p.getTaskCount(task.getId()))
-            .thenComparingInt(p -> availableDaysCount.getOrDefault(p.getId(), 0))
-            .thenComparing(p -> p.getLastDate(task.getId())));
+        available.sort(Comparator.comparingInt((Participant p) -> p.getTaskCount(task.getId()))
+                .thenComparingInt(p -> availableDaysCount.getOrDefault(p.getId(), 0))
+                .thenComparing(p -> p.getLastDate(task.getId())));
 
-    for (int i = 0; i < Math.min(neededCount, available.size()); i++) {
-        Participant selected = available.get(i);
-        ScheduleAssignment assignment = new ScheduleAssignment(task.getId(), date, selected.getId());
-        assignment.setStatus(AssignmentStatus.AUTOMATIC);
-        if (shouldSave) {
-            assignmentRepository.save(assignment);
+        for (int i = 0; i < Math.min(neededCount, available.size()); i++) {
+            Participant selected = available.get(i);
+            ScheduleAssignment assignment = new ScheduleAssignment(task.getId(), date, selected.getId());
+            assignment.setStatus(AssignmentStatus.AUTOMATIC);
+            if (shouldSave) {
+                assignmentRepository.save(assignment);
+            }
+            selected.incrementTaskCount(task.getId(), date);
         }
-        selected.incrementTaskCount(task.getId(), date);
     }
-}
 
     private DayOfWeek parseKoreanDay(String day) {
         switch (day) {
