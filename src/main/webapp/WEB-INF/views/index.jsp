@@ -62,6 +62,7 @@
             <h3 style="margin-top: 0; color: #1877f2; border-bottom: 2px solid #f0f2f5; padding-bottom: 10px;">업무별 사이클 현황 (다음 배정 우선순위)</h3>
             <div style="display: flex; flex-wrap: wrap; gap: 20px;">
                 <c:forEach var="task" items="${tasks}">
+                    <c:set var="taskIdStr" value="${task.id.toString()}" />
                     <div style="flex: 1; min-width: 280px; border: 1px solid #eee; border-radius: 6px; padding: 10px;">
                         <h4 style="margin: 0 0 10px 0; display: flex; align-items: center; gap: 8px;">
                             <div class="color-box" style="background-color: ${empty task.color ? '#666' : task.color}"></div>
@@ -76,7 +77,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <c:forEach var="stat" items="${taskCycleStats[task.id]}">
+                                <c:forEach var="stat" items="${taskCycleStats[taskIdStr]}">
                                     <tr>
                                         <td style="height: auto; padding: 5px; border: 1px solid #eee;">${stat.name}</td>
                                         <td style="height: auto; padding: 5px; border: 1px solid #eee; text-align: center;">${stat.count}</td>
@@ -155,12 +156,13 @@
                         <c:forEach var="day" items="${week}">
                             <td>
                                 <c:if test="${day != null}">
+                                    <c:set var="dayStr" value="${day.toString()}" />
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
                                         <span class="date-num">${day.dayOfMonth}</span>
                                         <button class="add-btn" onclick="toggleManualForm('add_form_${day.dayOfMonth}')" title="일정 추가">+</button>
                                     </div>
                                     
-                                    <c:forEach var="assign" items="${assignmentsMap[day]}">
+                                    <c:forEach var="assign" items="${assignmentsMap[dayStr]}">
                                         <div class="assignment" style="background-color: ${empty assign.taskColor ? '#007bff' : assign.taskColor}">
                                             <span class="participant-name" onclick="toggleManualForm('form_${assign.assignmentId}')">
                                                 ${assign.participantName}

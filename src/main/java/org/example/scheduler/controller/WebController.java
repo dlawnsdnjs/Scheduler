@@ -57,8 +57,8 @@ public class WebController {
         if (!currentWeek.isEmpty()) { while (currentWeek.size() < 7) currentWeek.add(null); weeks.add(currentWeek); }
 
         List<CalendarAssignmentDto> assignments = distributionService.getCalendarAssignments(targetYear, targetMonth, filterTaskId, filterParticipantId);
-        Map<LocalDate, List<CalendarAssignmentDto.AssignmentDetailDto>> assignmentsMap = assignments.stream()
-                .collect(Collectors.toMap(CalendarAssignmentDto::getDate, CalendarAssignmentDto::getAssignments));
+        Map<String, List<CalendarAssignmentDto.AssignmentDetailDto>> assignmentsMap = assignments.stream()
+                .collect(Collectors.toMap(a -> a.getDate().toString(), CalendarAssignmentDto::getAssignments));
 
         model.addAttribute("year", targetYear);
         model.addAttribute("month", targetMonth);
@@ -70,10 +70,10 @@ public class WebController {
         model.addAttribute("filterTaskId", filterTaskId);
         model.addAttribute("filterParticipantId", filterParticipantId);
 
-        // 업무별 사이클 현황 데이터 (JSP 호환성을 위해 DTO 리스트로 변환)
+        // 업무별 사이클 현황 데이터 (Key를 String으로 변환하여 JSP 호환성 확보)
         List<org.example.scheduler.domain.TaskDefinition> allTasks = taskService.findAll();
-        Map<Long, List<org.example.scheduler.dto.ParticipantStatsDto>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
-                org.example.scheduler.domain.TaskDefinition::getId,
+        Map<String, List<org.example.scheduler.dto.ParticipantStatsDto>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
+                task -> task.getId().toString(),
                 task -> task.getAllowedParticipants().stream()
                         .map(p -> {
                             org.example.scheduler.dto.ParticipantStatsDto dto = new org.example.scheduler.dto.ParticipantStatsDto();
