@@ -58,7 +58,11 @@ public class WebController {
 
         List<CalendarAssignmentDto> assignments = distributionService.getCalendarAssignments(targetYear, targetMonth, filterTaskId, filterParticipantId);
         Map<String, List<CalendarAssignmentDto.AssignmentDetailDto>> assignmentsMap = assignments.stream()
-                .collect(Collectors.toMap(a -> a.getDate().toString(), CalendarAssignmentDto::getAssignments));
+                .collect(Collectors.toMap(
+                        a -> a.getDate().toString(),
+                        CalendarAssignmentDto::getAssignments,
+                        (existing, replacement) -> existing // 중복 키 발생 시 기존 값 유지 (데이터 일관성 확보)
+                ));
 
         model.addAttribute("year", targetYear);
         model.addAttribute("month", targetMonth);
@@ -70,10 +74,10 @@ public class WebController {
         model.addAttribute("filterTaskId", filterTaskId);
         model.addAttribute("filterParticipantId", filterParticipantId);
 
-        // 업무별 사이클 현황 데이터 (Key를 String으로 변환하여 JSP 호환성 확보)
+        // 업무별 사이클 현황 데이터 (Key를 Long으로 유지하여 JSP EL에서의 호환성 및 성능 최적화)
         List<org.example.scheduler.domain.TaskDefinition> allTasks = taskService.findAll();
-        Map<String, List<org.example.scheduler.dto.ParticipantStatsDto>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
-                task -> task.getId().toString(),
+        Map<Long, List<org.example.scheduler.dto.ParticipantStatsDto>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
+                org.example.scheduler.domain.TaskDefinition::getId,
                 task -> task.getAllowedParticipants().stream()
                         .map(p -> {
                             org.example.scheduler.dto.ParticipantStatsDto dto = new org.example.scheduler.dto.ParticipantStatsDto();
