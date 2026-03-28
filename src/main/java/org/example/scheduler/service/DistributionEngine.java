@@ -94,8 +94,9 @@ public class DistributionEngine {
             assignment.setStatus(AssignmentStatus.AUTOMATIC);
             if (shouldSave) {
                 assignmentRepository.save(assignment);
+                // 실제 저장될 때만 참여자 통계 업데이트
+                selected.incrementTaskCount(task.getId(), date);
             }
-            selected.incrementTaskCount(task.getId(), date);
         }
     }
 
