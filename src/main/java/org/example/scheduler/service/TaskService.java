@@ -68,13 +68,27 @@ public void updateTask(Long taskId, String name, String cycleType, String cycleV
 
 @Transactional
 public void updateConflicts(Long taskId, List<Long> conflictTaskIds) {
-
     TaskDefinition task = findById(taskId);
-    if (conflictTaskIds == null) {
-        task.setConflictingTasks(new ArrayList<>());
-    } else {
-        task.setConflictingTasks(taskRepository.findAllById(conflictTaskIds));
+    List<TaskDefinition> newConflicts = (conflictTaskIds == null) ? new ArrayList<>() : taskRepository.findAllById(conflictTaskIds);
+
+    // 1. 기존 관계 중 제거된 것들에 대해 역방향 관계도 제거
+    for (TaskDefinition oldConflict : new ArrayList<>(task.getConflictingTasks())) {
+        if (!newConflicts.contains(oldConflict)) {
+            oldConflict.getConflictingTasks().remove(task); // 상대방 쪽에서도 나를 제거
+        }
     }
+
+    // 2. 새로운 관계들에 대해 역방향 관계도 추가
+    for (TaskDefinition newConflict : newConflicts) {
+        if (!newConflict.getConflictingTasks().contains(task)) {
+            newConflict.getConflictingTasks().add(task); // 상대방 쪽에서도 나를 추가
+        }
+    }
+
+    // 3. 내 목록 업데이트
+    task.setConflictingTasks(newConflicts);
+    taskRepository.save(task);
 }
+
 }
 

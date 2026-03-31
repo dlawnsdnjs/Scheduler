@@ -54,33 +54,19 @@ public class DistributionEngine {
         // 2. 해당 날짜의 모든 배정 정보 (다른 업무 포함)
         List<ScheduleAssignment> allDayAssignments = assignmentRepository.findByAssignedDateBetween(date, date);
         
-        // 3. 충돌 관계 로드 (캐싱을 고려할 수 있으나 우선 정확성을 위해 매번 조회)
-        Set<Long> myConflicts = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
-        List<TaskDefinition> allTasks = taskRepository.findAll();
-        Set<Long> tasksThatConflictWithMe = allTasks.stream()
-                .filter(t -> t.getConflictingTasks().stream().anyMatch(ct -> ct.getId().equals(task.getId())))
-                .map(TaskDefinition::getId)
-                .collect(Collectors.toSet());
+        // 3. 충돌 관계 정의 (TaskService에서 양방향 저장을 수행하므로 내 목록만 보면 됨)
+        Set<Long> conflictIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
 
         // 4. 가용 참여자 필터링
         List<Participant> available = participants.stream()
                 .filter(p -> p.isAvailable(date))
                 .filter(p -> existing.stream().noneMatch(a -> a.getParticipantId().equals(p.getId())))
                 .filter(p -> {
-                    // 당일 이 참여자가 배정된 다른 업무들 확인
-                    List<Long> assignedIds = allDayAssignments.stream()
+                    // 당일 이 참여자가 배정된 다른 업무 ID 목록 확인
+                    return allDayAssignments.stream()
                             .filter(a -> a.getParticipantId().equals(p.getId()))
                             .map(ScheduleAssignment::getTaskId)
-                            .toList();
-                    
-                    for (Long assignedId : assignedIds) {
-                        if (assignedId.equals(task.getId())) continue;
-                        // 양방향 충돌 체크
-                        if (myConflicts.contains(assignedId) || tasksThatConflictWithMe.contains(assignedId)) {
-                            return false;
-                        }
-                    }
-                    return true;
+                            .noneMatch(conflictIds::contains);
                 })
                 .collect(Collectors.toList());
 
@@ -101,15 +87,15 @@ public class DistributionEngine {
     }
 
     private DayOfWeek parseKoreanDay(String day) {
-        switch (day) {
-            case "월": case "MON": return DayOfWeek.MONDAY;
-            case "화": case "TUE": return DayOfWeek.TUESDAY;
-            case "수": case "WED": return DayOfWeek.WEDNESDAY;
-            case "목": case "THU": return DayOfWeek.THURSDAY;
-            case "금": case "FRI": return DayOfWeek.FRIDAY;
-            case "토": case "SAT": return DayOfWeek.SATURDAY;
-            case "일": case "SUN": return DayOfWeek.SUNDAY;
-            default: throw new IllegalArgumentException("지원하지 않는 요일 형식: " + day);
-        }
+        return switch (day) {
+            case "월", "MON" -> DayOfWeek.MONDAY;
+            case "화", "TUE" -> DayOfWeek.TUESDAY;
+            case "수", "WED" -> DayOfWeek.WEDNESDAY;
+            case "목", "THU" -> DayOfWeek.THURSDAY;
+            case "금", "FRI" -> DayOfWeek.FRIDAY;
+            case "토", "SAT" -> DayOfWeek.SATURDAY;
+            case "일", "SUN" -> DayOfWeek.SUNDAY;
+            default -> throw new IllegalArgumentException("지원하지 않는 요일 형식: " + day);
+        };
     }
 }
