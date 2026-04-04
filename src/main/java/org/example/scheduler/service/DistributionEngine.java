@@ -72,6 +72,11 @@ public class DistributionEngine {
         for (LocalDate date : targetDates) {
             int needed = task.getRequiredParticipantsPerDay();
             
+            // 현재 시점의 참여자별 횟수 통계 추출 (보너스 점수 계산용)
+            int maxCount = participants.stream()
+                    .mapToInt(p -> p.getTaskCount(task.getId()))
+                    .max().orElse(0);
+
             // 1. 후보군 필터링 및 점수 계산
             List<ParticipantScore> candidates = new ArrayList<>();
             for (Participant p : participants) {
@@ -83,19 +88,18 @@ public class DistributionEngine {
                         .anyMatch(a -> conflictIds.contains(a.getTaskId()));
                 if (hasConflict) continue;
 
-                // 점수 계산 (S = C - |G - C|)
+                // (1) 간격 점수 (S_gap = C - |G - C|)
                 LocalDate last = p.getLastDate(task.getId());
-                double score;
-                long gap;
+                long gap = (last == LocalDate.MIN) ? C : ChronoUnit.DAYS.between(last, date);
+                double gapScore = C - Math.abs(gap - C);
 
-                if (last == LocalDate.MIN) {
-                    score = C;
-                    gap = C;
-                } else {
-                    gap = ChronoUnit.DAYS.between(last, date);
-                    score = C - Math.abs(gap - C);
-                }
-                candidates.add(new ParticipantScore(p, score, gap));
+                // (2) 참여 횟수 보너스 (S_balance = (MaxCount - MyCount) * C)
+                // 참여 횟수 차이가 1이라도 나면 간격 점수의 최대치(C)만큼의 보너스를 주어 우선 배정 유도
+                int myCount = p.getTaskCount(task.getId());
+                double balanceBonus = (maxCount - myCount) * (double)C;
+
+                double totalScore = gapScore + balanceBonus;
+                candidates.add(new ParticipantScore(p, totalScore, gap));
             }
 
             // 2. 점수 높은 순 정렬
