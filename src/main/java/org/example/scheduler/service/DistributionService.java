@@ -58,13 +58,10 @@ public class DistributionService {
         List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
         Collections.sort(targetDates);
         
-        // 3. 참여자별 전체 가용 날짜 수 계산
-        Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
+        if (targetDates.isEmpty()) return;
 
-        // 4. 시간순 배정 수행 (간격 점수 최적화 적용)
-        for (LocalDate date : targetDates) {
-            distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, true);
-        }
+        // 3. 최적화 배정 수행 (간격 점수 합산 최대화)
+        distributionEngine.distributeOptimized(task, targetDates, allowedParticipants);
     }
 
     private Map<Long, Integer> calculateAvailableDays(List<LocalDate> targetDates, List<Participant> participants) {
