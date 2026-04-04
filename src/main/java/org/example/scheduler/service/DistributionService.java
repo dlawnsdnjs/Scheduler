@@ -56,24 +56,10 @@ public class DistributionService {
 
         // 2. 배정 대상 날짜 생성
         List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
-        
-        // 3. 참여자별 전체 가용 날짜 수 계산 (이번 배정 기간 기준)
-        Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
+        targetDates.sort(Comparator.naturalOrder()); // 시계열 순 정렬 (간격 계산 최적화)
 
-        // 4. 난이도 정렬 (가용 인원이 적은 날짜 우선)
-        Map<LocalDate, Integer> dateDifficultyMap = new HashMap<>();
-        for (LocalDate date : targetDates) {
-            long possibleCount = allowedParticipants.stream().filter(p -> p.isAvailable(date)).count();
-            dateDifficultyMap.put(date, (int) possibleCount);
-        }
-
-        List<LocalDate> sortedDates = new ArrayList<>(targetDates);
-        sortedDates.sort(Comparator.comparingInt(dateDifficultyMap::get));
-
-        // 5. 배정 수행 (DB 저장 및 통계 갱신은 엔진 내부에서 처리됨)
-        for (LocalDate date : sortedDates) {
-            distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, true);
-        }
+        // 3. 배정 수행 (엔진 내부에서 전체 일정 최적화 및 저장 수행)
+        distributionEngine.distributeWithScoring(task, targetDates, allowedParticipants);
     }
 
     private Map<Long, Integer> calculateAvailableDays(List<LocalDate> targetDates, List<Participant> participants) {
