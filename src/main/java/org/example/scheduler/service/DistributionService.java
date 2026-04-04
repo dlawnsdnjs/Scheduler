@@ -54,12 +54,17 @@ public class DistributionService {
         }
         assignmentRepository.deleteAll(toDelete);
 
-        // 2. 배정 대상 날짜 생성
+        // 2. 배정 대상 날짜 생성 및 시간순 정렬
         List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
-        targetDates.sort(Comparator.naturalOrder()); // 시계열 순 정렬 (간격 계산 최적화)
+        Collections.sort(targetDates);
+        
+        // 3. 참여자별 전체 가용 날짜 수 계산
+        Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
 
-        // 3. 배정 수행 (엔진 내부에서 전체 일정 최적화 및 저장 수행)
-        distributionEngine.distributeWithScoring(task, targetDates, allowedParticipants);
+        // 4. 시간순 배정 수행 (간격 점수 최적화 적용)
+        for (LocalDate date : targetDates) {
+            distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, true);
+        }
     }
 
     private Map<Long, Integer> calculateAvailableDays(List<LocalDate> targetDates, List<Participant> participants) {
@@ -88,7 +93,6 @@ public class DistributionService {
         TaskDefinition task = taskRepository.findById(taskId).get();
         List<Participant> allowedParticipants = task.getAllowedParticipants();
         
-        // 당일 재배정을 위해 이번 달 가용성 재계산
         LocalDate start = date.withDayOfMonth(1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
         List<LocalDate> monthTargetDates = distributionEngine.getTargetDates(task, start, end);
@@ -120,7 +124,7 @@ public class DistributionService {
                 .filter(a -> {
                     TaskDefinition t = tasks.get(a.getTaskId());
                     Participant p = participants.get(a.getParticipantId());
-                    return t != null && p != null; // 유효한 데이터만 필터링
+                    return t != null && p != null;
                 })
                 .collect(Collectors.groupingBy(
                         ScheduleAssignment::getAssignedDate,
@@ -147,11 +151,7 @@ public class DistributionService {
     @Transactional
     public void addManualAssignment(Long taskId, LocalDate date, Long participantId) {
         List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
-        boolean duplicate = existing.stream().anyMatch(a -> a.getParticipantId().equals(participantId));
-        
-        if (duplicate) {
-            return;
-        }
+        if (existing.stream().anyMatch(a -> a.getParticipantId().equals(participantId))) return;
 
         ScheduleAssignment assignment = new ScheduleAssignment(taskId, date, participantId);
         assignment.setStatus(AssignmentStatus.MANUAL_FIXED);
@@ -196,14 +196,9 @@ public class DistributionService {
 
     @Transactional
     public void clearAssignments(Long taskId, LocalDate start, LocalDate end) {
-        if (taskId != null) {
-            // 특정 업무만 삭제
-            List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, start, end);
-            assignmentRepository.deleteAll(toDelete);
-        } else {
-            // 전체 업무 삭제
-            List<ScheduleAssignment> toDelete = assignmentRepository.findByAssignedDateBetween(start, end);
-            assignmentRepository.deleteAll(toDelete);
-        }
+        List<ScheduleAssignment> toDelete = (taskId != null) ? 
+                assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, start, end) :
+                assignmentRepository.findByAssignedDateBetween(start, end);
+        assignmentRepository.deleteAll(toDelete);
     }
 }
