@@ -24,6 +24,9 @@ public class DistributionEngine {
 
     private final ScheduleAssignmentRepository assignmentRepository;
 
+    private static final int MAX_ITERATIONS = 5000;
+    private int iterationCount = 0;
+
     public List<LocalDate> getTargetDates(TaskDefinition task, LocalDate start, LocalDate end) {
         List<LocalDate> dates = new ArrayList<>();
         LocalDate current = start;
@@ -48,98 +51,124 @@ public class DistributionEngine {
         return dates;
     }
 
-    /**
-     * 전체 일정에 대해 간격 기반 점수 최적화 방식으로 배분 수행
-     */
     public void distributeWithScoring(TaskDefinition task, List<LocalDate> targetDates, List<Participant> allowedParticipants) {
-        log.info("Starting Gap-based Scoring Distribution for task: {} (C={})", task.getTaskName(), allowedParticipants.size());
-        
-        // 1. 해당 월의 모든 배정 정보 사전 조회 (충돌 및 중복 체크용)
+        log.info("Starting Optimized Backtracking Distribution for task: {} (C={})", task.getTaskName(), allowedParticipants.size());
+        iterationCount = 0;
+
+        // 1. 초기 데이터 준비
         LocalDate start = targetDates.isEmpty() ? LocalDate.now() : targetDates.get(0);
         LocalDate end = targetDates.isEmpty() ? LocalDate.now() : targetDates.get(targetDates.size() - 1);
-        List<ScheduleAssignment> monthAssignments = assignmentRepository.findByAssignedDateBetween(start, end);
-        
-        // 2. 참여자별 마지막 배정일 초기화 (이미 DB에 있는 이전 배정일 포함)
-        Map<Long, LocalDate> lastAssignedDates = new HashMap<>();
+        List<ScheduleAssignment> otherAssignments = assignmentRepository.findByAssignedDateBetween(start, end)
+                .stream().filter(a -> !a.getTaskId().equals(task.getId())).collect(Collectors.toList());
+
+        Map<Long, LocalDate> initialLastDates = new HashMap<>();
         for (Participant p : allowedParticipants) {
-            lastAssignedDates.put(p.getId(), p.getLastDate(task.getId()));
+            initialLastDates.put(p.getId(), p.getLastDate(task.getId()));
         }
 
-        // 3. 충돌 임무 ID 목록
-        Set<Long> conflictIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
-        int C = allowedParticipants.size();
+        // 2. 백트래킹 탐색 수행
+        List<ScheduleAssignment> result = new ArrayList<>();
+        boolean success = backtrack(0, targetDates, task, allowedParticipants, otherAssignments, initialLastDates, result);
 
-        // 4. 날짜별 순회 (점수 최적화를 위해 가급적 시계열 순으로 처리)
-        for (LocalDate date : targetDates) {
-            List<ScheduleAssignment> existing = monthAssignments.stream()
-                    .filter(a -> a.getTaskId().equals(task.getId()) && a.getAssignedDate().equals(date))
-                    .toList();
-            
-            int neededCount = task.getRequiredParticipantsPerDay() - existing.size();
-            if (neededCount <= 0) continue;
-
-            // 해당 날짜의 다른 업무 배정 정보 (충돌 체크용)
-            List<ScheduleAssignment> otherDayAssignments = monthAssignments.stream()
-                    .filter(a -> a.getAssignedDate().equals(date))
-                    .toList();
-
-            // 가용 참여자 필터링 및 점수 계산
-            List<ScoringDetail> candidates = new ArrayList<>();
-            for (Participant p : allowedParticipants) {
-                // 불참 규칙 (최우선)
-                if (!p.isAvailable(date)) continue;
-                
-                // 이미 해당 업무에 배정됨
-                if (existing.stream().anyMatch(a -> a.getParticipantId().equals(p.getId()))) continue;
-                
-                // 충돌 임무 수행 중
-                boolean hasConflict = otherDayAssignments.stream()
-                        .filter(a -> a.getParticipantId().equals(p.getId()))
-                        .map(ScheduleAssignment::getTaskId)
-                        .anyMatch(conflictIds::contains);
-                if (hasConflict) continue;
-
-                // 점수 계산: S = C - |G - C|
-                LocalDate lastDate = lastAssignedDates.getOrDefault(p.getId(), LocalDate.MIN);
-                long gap;
-                if (lastDate.equals(LocalDate.MIN)) {
-                    gap = C; // 처음 배정인 경우 이상적인 간격 부여
-                } else {
-                    gap = ChronoUnit.DAYS.between(lastDate, date);
-                }
-                
-                double score = C - Math.abs(gap - C);
-                candidates.add(new ScoringDetail(p, score, gap));
+        if (success) {
+            log.info("Optimization successful! Saving {} assignments.", result.size());
+            for (ScheduleAssignment sa : result) {
+                assignmentRepository.save(sa);
+                // 통계 업데이트
+                Participant p = allowedParticipants.stream().filter(part -> part.getId().equals(sa.getParticipantId())).findFirst().orElse(null);
+                if (p != null) p.incrementTaskCount(task.getId(), sa.getAssignedDate());
             }
-
-            // 점수순 정렬 (높은 점수 우선)
-            candidates.sort(Comparator.comparingDouble(ScoringDetail::getScore).reversed());
-
-            log.info("Date: {} - Candidates: {}", date, candidates.stream()
-                    .limit(5)
-                    .map(c -> String.format("%s(S:%.1f, G:%d)", c.participant.getName(), c.score, c.gap))
-                    .collect(Collectors.joining(", ")));
-
-            // 배정 수행
-            for (int i = 0; i < Math.min(neededCount, candidates.size()); i++) {
-                Participant selected = candidates.get(i).participant;
-                ScheduleAssignment assignment = new ScheduleAssignment(task.getId(), date, selected.getId());
-                assignment.setStatus(AssignmentStatus.AUTOMATIC);
-                
-                assignmentRepository.save(assignment);
-                monthAssignments.add(assignment); // 메모리 내 목록 갱신
-                
-                // 참여자 통계 갱신
-                selected.incrementTaskCount(task.getId(), date);
-                lastAssignedDates.put(selected.getId(), date);
-            }
+        } else {
+            log.error("Failed to find a full assignment schedule that satisfies all constraints.");
+            // 실패 시 최소한의 배정이라도 시도하거나 사용자에게 알림 (여기서는 로그만 남김)
         }
     }
 
-    /**
-     * 특정 날짜에 대한 단일 배정 (기존 로직 유지하되 점수 모델 적용)
-     */
+    private boolean backtrack(int dateIdx, List<LocalDate> targetDates, TaskDefinition task, 
+                             List<Participant> participants, List<ScheduleAssignment> otherAssignments,
+                             Map<Long, LocalDate> lastDates, List<ScheduleAssignment> currentResult) {
+        
+        if (dateIdx >= targetDates.size()) return true; // 모든 날짜 배정 완료
+        if (++iterationCount > MAX_ITERATIONS) return false;
+
+        LocalDate date = targetDates.get(dateIdx);
+        int needed = task.getRequiredParticipantsPerDay();
+        int C = participants.size();
+        Set<Long> conflictIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
+
+        // 1. 후보군 추출 및 점수 계산
+        List<ScoringDetail> candidates = new ArrayList<>();
+        for (Participant p : participants) {
+            if (!p.isAvailable(date)) continue;
+            
+            boolean hasConflict = otherAssignments.stream()
+                    .filter(a -> a.getAssignedDate().equals(date) && a.getParticipantId().equals(p.getId()))
+                    .map(ScheduleAssignment::getTaskId)
+                    .anyMatch(conflictIds::contains);
+            if (hasConflict) continue;
+
+            LocalDate lastDate = lastDates.getOrDefault(p.getId(), LocalDate.MIN);
+            long gap = lastDate.equals(LocalDate.MIN) ? C : ChronoUnit.DAYS.between(lastDate, date);
+            double score = C - Math.abs(gap - C);
+            candidates.add(new ScoringDetail(p, score, gap));
+        }
+
+        if (candidates.size() < needed) return false; // 해당 날짜 충족 불가 -> 백트래킹
+
+        // 2. 점수 높은 순으로 조합 시도
+        candidates.sort(Comparator.comparingDouble(ScoringDetail::getScore).reversed());
+        
+        // 간단한 조합 생성 (needed가 작으므로 상위 N개 중 조합 선택)
+        List<List<ScoringDetail>> combinations = getCombinations(candidates, needed);
+
+        for (List<ScoringDetail> combo : combinations) {
+            // 선택 적용
+            List<ScheduleAssignment> tempAdded = new ArrayList<>();
+            Map<Long, LocalDate> nextLastDates = new HashMap<>(lastDates);
+            
+            for (ScoringDetail sd : combo) {
+                ScheduleAssignment sa = new ScheduleAssignment(task.getId(), date, sd.participant.getId());
+                sa.setStatus(AssignmentStatus.AUTOMATIC);
+                tempAdded.add(sa);
+                nextLastDates.put(sd.participant.getId(), date);
+            }
+
+            currentResult.addAll(tempAdded);
+            if (backtrack(dateIdx + 1, targetDates, task, participants, otherAssignments, nextLastDates, currentResult)) {
+                return true;
+            }
+            // 실패 시 원복
+            for (int i = 0; i < tempAdded.size(); i++) {
+                currentResult.remove(currentResult.size() - 1);
+            }
+        }
+
+        return false;
+    }
+
+    private List<List<ScoringDetail>> getCombinations(List<ScoringDetail> list, int n) {
+        List<List<ScoringDetail>> results = new ArrayList<>();
+        // 성능을 위해 후보가 너무 많으면 상위권 위주로 탐색 범위를 제한 (Pruning)
+        int limit = Math.min(list.size(), 8); 
+        generateCombo(new ArrayList<>(), list.subList(0, limit), n, 0, results);
+        return results;
+    }
+
+    private void generateCombo(List<ScoringDetail> current, List<ScoringDetail> list, int n, int start, List<List<ScoringDetail>> results) {
+        if (current.size() == n) {
+            results.add(new ArrayList<>(current));
+            return;
+        }
+        for (int i = start; i < list.size(); i++) {
+            current.add(list.get(i));
+            generateCombo(current, list, n, i + 1, results);
+            current.remove(current.size() - 1);
+            if (results.size() >= 15) break; // 조합 시도 횟수 제한
+        }
+    }
+
     public void assignForDate(TaskDefinition task, LocalDate date, List<Participant> participants, Map<Long, Integer> availableDaysCount, boolean shouldSave) {
+        // 단일 날짜 배정 로직도 점수 기반 유지 (백트래킹 없이 즉시 결정)
         List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(task.getId(), date, date);
         int neededCount = task.getRequiredParticipantsPerDay() - existing.size();
         if (neededCount <= 0) return;
@@ -162,15 +191,10 @@ public class DistributionEngine {
             LocalDate lastDate = p.getLastDate(task.getId());
             long gap = lastDate.equals(LocalDate.MIN) ? C : ChronoUnit.DAYS.between(lastDate, date);
             double score = C - Math.abs(gap - C);
-            
-            // 기존 가용 날짜 가중치 조금 섞기 (선택 사항)
-            // score += 0.1 * availableDaysCount.getOrDefault(p.getId(), 0);
-
             candidates.add(new ScoringDetail(p, score, gap));
         }
 
-        candidates.sort(Comparator.comparingDouble(ScoringDetail::getScore).reversed()
-                .thenComparingInt(c -> c.participant.getTaskCount(task.getId())));
+        candidates.sort(Comparator.comparingDouble(ScoringDetail::getScore).reversed());
 
         for (int i = 0; i < Math.min(neededCount, candidates.size()); i++) {
             Participant selected = candidates.get(i).participant;
