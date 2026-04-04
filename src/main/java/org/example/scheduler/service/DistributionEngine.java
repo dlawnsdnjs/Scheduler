@@ -69,10 +69,20 @@ public class DistributionEngine {
         List<ScheduleAssignment> otherAssignments = assignmentRepository.findByAssignedDateBetween(start, end)
                 .stream().filter(a -> !a.getTaskId().equals(task.getId())).collect(Collectors.toList());
 
+        // 해당 업무의 모든 과거 배정 날짜 로드 (간격 계산용)
+        List<LocalDate> pastAssignmentDates = assignmentRepository.findByTaskId(task.getId()).stream()
+                .map(ScheduleAssignment::getAssignedDate)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        // 이번 배정 과정에서 확정되는 날짜들을 순차적으로 담을 리스트
+        List<LocalDate> allOccurredDates = new ArrayList<>(pastAssignmentDates);
+
         for (LocalDate date : targetDates) {
             int needed = task.getRequiredParticipantsPerDay();
             
-            // 현재 시점의 참여자별 횟수 통계 추출 (보너스 점수 계산용)
+            // 현재 시점의 최다 참여 횟수 추출
             int maxCount = participants.stream()
                     .mapToInt(p -> p.getTaskCount(task.getId()))
                     .max().orElse(0);
@@ -82,24 +92,30 @@ public class DistributionEngine {
             for (Participant p : participants) {
                 if (!p.isAvailable(date)) continue;
                 
-                // 충돌 체크
                 boolean hasConflict = otherAssignments.stream()
                         .filter(a -> a.getAssignedDate().equals(date) && a.getParticipantId().equals(p.getId()))
                         .anyMatch(a -> conflictIds.contains(a.getTaskId()));
                 if (hasConflict) continue;
 
-                // (1) 간격 점수 (S_gap = C - |G - C|)
+                // [개선된 간격 계산] 마지막 배정 이후 업무가 몇 번 발생했는지 계산
                 LocalDate last = p.getLastDate(task.getId());
-                long gap = (last == LocalDate.MIN) ? C : ChronoUnit.DAYS.between(last, date);
-                double gapScore = C - Math.abs(gap - C);
+                long G;
+                if (last == LocalDate.MIN) {
+                    G = C; // 신규 참여자는 한 사이클이 지난 것으로 간주
+                } else {
+                    // last 이후부터 현재 date 전까지 발생한 총 업무 횟수
+                    final LocalDate lastFix = last;
+                    G = allOccurredDates.stream()
+                            .filter(d -> d.isAfter(lastFix) && d.isBefore(date))
+                            .count() + 1; // 이번 차례 포함
+                }
 
-                // (2) 참여 횟수 보너스 (S_balance = (MaxCount - MyCount) * C)
-                // 참여 횟수 차이가 1이라도 나면 간격 점수의 최대치(C)만큼의 보너스를 주어 우선 배정 유도
+                double gapScore = C - Math.abs(G - C);
                 int myCount = p.getTaskCount(task.getId());
                 double balanceBonus = (maxCount - myCount) * (double)C;
 
                 double totalScore = gapScore + balanceBonus;
-                candidates.add(new ParticipantScore(p, totalScore, gap));
+                candidates.add(new ParticipantScore(p, totalScore, G));
             }
 
             // 2. 점수 높은 순 정렬
@@ -110,10 +126,16 @@ public class DistributionEngine {
                 ParticipantScore ps = candidates.get(i);
                 ScheduleAssignment sa = new ScheduleAssignment(task.getId(), date, ps.p.getId());
                 sa.setStatus(AssignmentStatus.AUTOMATIC);
-                sa.setNote(String.format("점수:%.1f, 간격:%d", ps.score, ps.gap));
+                sa.setNote(String.format("점수:%.1f, 발생간격:%d회", ps.score, ps.gap));
                 
                 assignmentRepository.save(sa);
                 ps.p.incrementTaskCount(task.getId(), date);
+            }
+            
+            // 이번 날짜를 발생 이력에 추가 (다음 날짜의 간격 계산에 반영)
+            if (!allOccurredDates.contains(date)) {
+                allOccurredDates.add(date);
+                Collections.sort(allOccurredDates);
             }
         }
     }
