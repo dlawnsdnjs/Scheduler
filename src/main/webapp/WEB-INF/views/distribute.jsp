@@ -16,7 +16,8 @@
         .form-section.active { display: block; }
         .form-group { margin-bottom: 20px; }
         label { display: block; margin-bottom: 8px; font-weight: bold; }
-        select, input { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+        select, input:not([type="checkbox"]) { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ddd; border-radius: 4px; }
+        input[type="checkbox"] { width: auto; cursor: pointer; }
         .btn { padding: 12px 20px; background: #28a745; color: #fff; border: none; border-radius: 5px; cursor: pointer; width: 100%; font-size: 1.1em; font-weight: bold; }
         .info-box { background-color: #e9ecef; padding: 15px; border-radius: 5px; margin-bottom: 20px; font-size: 0.9em; line-height: 1.5; }
     </style>
