@@ -225,16 +225,20 @@ public class WebController {
     }
 
     @PostMapping("/distribute/run")
-    public String runDistribution(Long taskId, int year, int month) {
-        distributionService.distribute(taskId, year, month);
+    public String runDistribution(@RequestParam(name = "taskIds", required = false) List<Long> taskIds, int year, int month) {
+        if (taskIds != null && !taskIds.isEmpty()) {
+            distributionService.distribute(taskIds, year, month);
+        }
         return "redirect:/?year=" + year + "&month=" + month;
     }
 
     @PostMapping("/distribute/runCustom")
-    public String runCustomDistribution(Long taskId, String startDate, String endDate) {
+    public String runCustomDistribution(@RequestParam(name = "taskIds", required = false) List<Long> taskIds, String startDate, String endDate) {
         LocalDate start = LocalDate.parse(startDate);
         LocalDate end = LocalDate.parse(endDate);
-        distributionService.distribute(taskId, start, end);
+        if (taskIds != null && !taskIds.isEmpty()) {
+            distributionService.distribute(taskIds, start, end);
+        }
         return "redirect:/?year=" + start.getYear() + "&month=" + start.getMonthValue();
     }
 

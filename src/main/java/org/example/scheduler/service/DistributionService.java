@@ -23,10 +23,26 @@ public class DistributionService {
     private final DistributionEngine distributionEngine;
 
     @Transactional
+    public void distribute(List<Long> taskIds, int year, int month) {
+        if (taskIds == null) return;
+        for (Long taskId : taskIds) {
+            distribute(taskId, year, month);
+        }
+    }
+
+    @Transactional
     public void distribute(Long taskId, int year, int month) {
         LocalDate start = LocalDate.of(year, month, 1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
         distribute(taskId, start, end);
+    }
+
+    @Transactional
+    public void distribute(List<Long> taskIds, LocalDate start, LocalDate end) {
+        if (taskIds == null) return;
+        for (Long taskId : taskIds) {
+            distribute(taskId, start, end);
+        }
     }
 
     @Transactional

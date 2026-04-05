@@ -36,12 +36,19 @@
             <div class="info-box">지정된 연월의 모든 수행 일정을 공정하게 배분합니다.</div>
             <form action="/distribute/run" method="post">
                 <div class="form-group">
-                    <label>배분할 업무 선택:</label>
-                    <select name="taskId" required>
+                    <label>배분할 업무 선택 (여러 개 선택 가능):</label>
+                    <div style="background:#fff; border:1px solid #ddd; padding:10px; border-radius:4px; max-height:200px; overflow-y:auto;">
+                        <div style="margin-bottom:8px; padding-bottom:5px; border-bottom:1px solid #eee;">
+                            <label style="font-weight:normal; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                                <input type="checkbox" id="selectAllMonth" onclick="toggleAll('month')"> <strong>전체 선택</strong>
+                            </label>
+                        </div>
                         <c:forEach var="task" items="${tasks}">
-                            <option value="${task.id}">${task.taskName}</option>
+                            <label style="font-weight:normal; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                <input type="checkbox" name="taskIds" value="${task.id}" class="task-check-month"> ${task.taskName}
+                            </label>
                         </c:forEach>
-                    </select>
+                    </div>
                 </div>
                 <div style="display:flex; gap:10px;">
                     <div class="form-group" style="flex:1;">
@@ -59,15 +66,22 @@
 
         <!-- 자유 기간 배분 폼 -->
         <div id="customMode" class="form-section">
-... (기존 폼 내용 유지) ...
+            <div class="info-box">원하는 시작일과 종료일을 지정하여 해당 기간의 일정을 배분합니다.</div>
             <form action="/distribute/runCustom" method="post">
                 <div class="form-group">
-                    <label>배분할 업무 선택:</label>
-                    <select name="taskId" required>
+                    <label>배분할 업무 선택 (여러 개 선택 가능):</label>
+                    <div style="background:#fff; border:1px solid #ddd; padding:10px; border-radius:4px; max-height:200px; overflow-y:auto;">
+                        <div style="margin-bottom:8px; padding-bottom:5px; border-bottom:1px solid #eee;">
+                            <label style="font-weight:normal; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                                <input type="checkbox" id="selectAllCustom" onclick="toggleAll('custom')"> <strong>전체 선택</strong>
+                            </label>
+                        </div>
                         <c:forEach var="task" items="${tasks}">
-                            <option value="${task.id}">${task.taskName}</option>
+                            <label style="font-weight:normal; cursor:pointer; display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                                <input type="checkbox" name="taskIds" value="${task.id}" class="task-check-custom"> ${task.taskName}
+                            </label>
                         </c:forEach>
-                    </select>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>시작일:</label>
@@ -132,6 +146,12 @@
             var now = new Date();
             var lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
             document.getElementById('customEndDate').value = lastDay.toISOString().split('T')[0];
+        }
+
+        function toggleAll(mode) {
+            const selectAll = document.getElementById(mode === 'month' ? 'selectAllMonth' : 'selectAllCustom');
+            const checks = document.querySelectorAll(mode === 'month' ? '.task-check-month' : '.task-check-custom');
+            checks.forEach(c => c.checked = selectAll.checked);
         }
     </script>
 </body>

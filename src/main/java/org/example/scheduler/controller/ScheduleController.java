@@ -16,8 +16,8 @@ public class ScheduleController {
     private final DistributionService distributionService;
 
     @PostMapping("/distribute")
-    public ResponseEntity<Void> distribute(@RequestParam Long taskId, @RequestParam int year, @RequestParam int month) {
-        distributionService.distribute(taskId, year, month);
+    public ResponseEntity<Void> distribute(@RequestParam(name = "taskId") List<Long> taskIds, @RequestParam int year, @RequestParam int month) {
+        distributionService.distribute(taskIds, year, month);
         return ResponseEntity.ok().build();
     }
 

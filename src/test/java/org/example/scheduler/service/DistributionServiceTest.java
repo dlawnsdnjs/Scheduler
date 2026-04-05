@@ -44,7 +44,7 @@ class DistributionServiceTest {
         
         // 이영희는 짝수 주기(나머지 0)인 날만 근무 가능
         Participant p2 = new Participant("이영희", LocalDate.of(2026, 1, 1));
-        p2.addAvailabilityRule("EVEN_DAYS", null);
+        p2.addAvailabilityRule("EVEN_DAYS", "2026-01-01");
 
         participantRepository.saveAll(List.of(p1, p2));
         
@@ -95,5 +95,25 @@ class DistributionServiceTest {
         ScheduleAssignment updatedA1 = assignmentRepository.findById(a1.getId()).get();
         assertThat(updatedA1.getParticipantId()).isEqualTo(p2.getId());
         assertThat(updatedA1.getStatus()).isEqualTo(AssignmentStatus.MANUAL_FIXED);
+    }
+
+    @Test
+    @DisplayName("다중 업무 일괄 배분 검증")
+    void batchDistributeTest() {
+        // 추가 업무 생성
+        TaskDefinition task2 = new TaskDefinition("야간", "WEEKLY", "MON,TUE,WED,THU,FRI,SAT,SUN", 1);
+        Participant p1 = participantRepository.findAll().stream().filter(p -> p.getName().equals("홍길동")).findFirst().get();
+        Participant p2 = participantRepository.findAll().stream().filter(p -> p.getName().equals("이영희")).findFirst().get();
+        task2.setAllowedParticipants(new java.util.ArrayList<>(List.of(p1, p2)));
+        Long taskId2 = taskRepository.save(task2).getId();
+
+        // 두 업무에 대해 일괄 배분 수행
+        distributionService.distribute(List.of(taskId, taskId2), 2026, 4);
+
+        List<ScheduleAssignment> assignments1 = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30));
+        List<ScheduleAssignment> assignments2 = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId2, LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30));
+
+        assertThat(assignments1).isNotEmpty();
+        assertThat(assignments2).isNotEmpty();
     }
 }
