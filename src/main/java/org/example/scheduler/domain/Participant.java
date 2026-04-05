@@ -72,18 +72,18 @@ public class Participant {
     }
 
     public boolean isAvailable(LocalDate date) {
-        // 1. 입사/퇴사 기간 체크
+        // 1. 참여 가능 기간 체크 (입사일 ~ 퇴사일)
         if (date.isBefore(joinDate)) return false;
         if (leaveDate != null && date.isAfter(leaveDate)) return false;
 
-        // 2. 불참 기간(Range)에 포함되면 불가
+        // 2. 불참 기간(Range)에 포함되면 배정 불가 (우선순위 높음)
         for (UnavailableRange range : unavailableRanges) {
             if (!date.isBefore(range.getStartDate()) && !date.isAfter(range.getEndDate())) {
                 return false;
             }
         }
 
-        // 3. 가용 규칙(AvailabilityRule) 체크
+        // 3. 가용성(참여 가능) 규칙 체크
         if (!availabilityRules.isEmpty()) {
             boolean matchesAtLeastOne = false;
             for (AvailabilityRule rule : availabilityRules) {
@@ -92,7 +92,7 @@ public class Participant {
                     break;
                 }
             }
-            // 규칙이 등록되어 있다면 적어도 하나의 규칙은 만족해야 배정 가능
+            // 가용 규칙이 하나라도 등록되어 있다면, 적어도 하나는 만족해야 배정 가능
             if (!matchesAtLeastOne) return false;
         }
 
@@ -100,33 +100,35 @@ public class Participant {
     }
 
     private boolean checkRule(AvailabilityRule rule, LocalDate date) {
-        // 모든 순환 규칙을 기준일(2026-01-01) 기반 2일 주기 계산으로 통일
-        LocalDate baseDate = LocalDate.of(2026, 1, 1);
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(baseDate, date);
-        int remainder = (int) Math.floorMod(daysBetween, 2); // 0 또는 1
+        try {
+            switch (rule.getRuleType()) {
+                case "EVEN_DAYS": // 기준일로부터 2일 주기 중 첫 번째 날(짝수번째 느낌)
+                case "ODD_DAYS":  // 기준일로부터 2일 주기 중 두 번째 날(홀수번째 느낌)
+                    if (rule.getRuleValue() == null) return true; // 기준일 없으면 기본 허용
+                    LocalDate baseE = LocalDate.parse(rule.getRuleValue());
+                    long diffE = java.time.temporal.ChronoUnit.DAYS.between(baseE, date);
+                    int remainderE = (int) Math.floorMod(diffE, 2);
+                    return "EVEN_DAYS".equals(rule.getRuleType()) ? (remainderE == 0) : (remainderE == 1);
 
-        switch (rule.getRuleType()) {
-            case "EVEN_DAYS": // 짝수일 배정 (나머지 0인 날)
-                return remainder == 0;
-            case "ODD_DAYS": // 홀수일 배정 (나머지 1인 날)
-                return remainder == 1;
-            case "WEEKDAYS_ONLY":
-                return date.getDayOfWeek().getValue() <= 5;
-            case "WEEKENDS_ONLY":
-                return date.getDayOfWeek().getValue() >= 6;
-            case "N_DAY_CYCLE":
-                if (rule.getRuleValue() == null || !rule.getRuleValue().contains(":")) return false;
-                try {
+                case "WEEKDAYS_ONLY":
+                    return date.getDayOfWeek().getValue() <= 5;
+                case "WEEKENDS_ONLY":
+                    return date.getDayOfWeek().getValue() >= 6;
+
+                case "N_DAY_CYCLE":
+                    if (rule.getRuleValue() == null || !rule.getRuleValue().contains(":")) return false;
                     String[] parts = rule.getRuleValue().split(":");
-                    LocalDate base = LocalDate.parse(parts[0]);
+                    LocalDate baseN = LocalDate.parse(parts[0]);
                     int cycle = Integer.parseInt(parts[1]);
-                    long diff = java.time.temporal.ChronoUnit.DAYS.between(base, date);
-                    return Math.floorMod(diff, cycle) == 0;
-                } catch (Exception e) {
-                    return false;
-                }
-            default:
-                return true;
+                    long diffN = java.time.temporal.ChronoUnit.DAYS.between(baseN, date);
+                    // N일 주기 중 첫 번째 날(나머지 0)에만 가용한 것으로 판단
+                    return Math.floorMod(diffN, cycle) == 0;
+
+                default:
+                    return true;
+            }
+        } catch (Exception e) {
+            return false; // 파싱 에러 시 안전하게 불가 처리
         }
     }
 

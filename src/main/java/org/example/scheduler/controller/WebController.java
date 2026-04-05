@@ -187,8 +187,20 @@ public class WebController {
     }
 
     @PostMapping("/participants/addRule")
-    public String addAvailabilityRule(Long participantId, String ruleType, String ruleValue) {
-        participantService.addAvailabilityRule(participantId, ruleType, ruleValue);
+    public String addAvailabilityRule(Long participantId, String ruleType, 
+                                      @RequestParam(required = false) String ruleValue,
+                                      @RequestParam(required = false) String baseDate,
+                                      @RequestParam(required = false) Integer cycleDays) {
+        String finalRuleValue = ruleValue;
+
+        if ("N_DAY_CYCLE".equals(ruleType)) {
+            finalRuleValue = baseDate + ":" + (cycleDays != null ? cycleDays : 2);
+        } else if ("EVEN_DAYS".equals(ruleType) || "ODD_DAYS".equals(ruleType)) {
+            // 홀수/짝수 규칙도 기준일을 저장하여 예측 가능하게 함 (값이 없으면 오늘 기준)
+            finalRuleValue = (baseDate != null && !baseDate.isEmpty()) ? baseDate : LocalDate.now().toString();
+        }
+
+        participantService.addAvailabilityRule(participantId, ruleType, finalRuleValue);
         return "redirect:/participants/detail?id=" + participantId;
     }
 

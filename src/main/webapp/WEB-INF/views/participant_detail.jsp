@@ -53,48 +53,55 @@
             </ul>
         </div>
 
-        <!-- 2. 가용 규칙 관리 -->
+        <!-- 2. 가용(참여 가능) 규칙 관리 -->
         <div class="section">
-            <h3>가용 규칙 설정 (Availability Rules)</h3>
+            <h3>가용(근무 가능) 규칙 설정 (Availability Rules)</h3>
+            <p><small>참여자가 배정될 수 있는 날짜 패턴을 정의합니다. (규칙이 없으면 모든 날짜 가용)</small></p>
             
             <div class="rule-card">
-                <h4>일반 규칙 추가</h4>
+                <h4>일반 가용 패턴 추가</h4>
                 <form action="/participants/addRule" method="post">
                     <input type="hidden" name="participantId" value="${p.id}">
-                    <select name="ruleType">
-                        <option value="EVEN_DAYS">짝수 날짜만 가능 (매월 갱신됨)</option>
-                        <option value="ODD_DAYS">홀수 날짜만 가능 (매월 갱신됨)</option>
-                        <option value="WEEKDAYS_ONLY">평일만 가능 (월~금)</option>
-                        <option value="WEEKENDS_ONLY">주말만 가능 (토~일)</option>
+                    패턴: 
+                    <select name="ruleType" required>
+                        <option value="EVEN_DAYS">기준일로부터 격일(1일째) 근무</option>
+                        <option value="ODD_DAYS">기준일로부터 격일(2일째) 근무</option>
+                        <option value="WEEKDAYS_ONLY">평일만 근무 (월~금)</option>
+                        <option value="WEEKENDS_ONLY">주말만 근무 (토~일)</option>
                     </select>
-                    <button type="submit" class="btn" style="background:#28a745;">규칙 추가</button>
+                    기준일: <input type="date" name="baseDate" value="<%= java.time.LocalDate.now() %>">
+                    <button type="submit" class="btn" style="background:#28a745;">패턴 추가</button>
                 </form>
             </div>
 
             <div class="rule-card" style="margin-top:15px; border-top: 2px solid #eee;">
                 <h4>N일 주기(교대) 규칙 추가</h4>
-                <p><small>특정 기준일부터 N일 주기로 가용/불가 패턴을 설정합니다.</small></p>
+                <p><small>특정 기준일부터 N일마다 한 번씩 근무가 가능한 경우 설정합니다.</small></p>
                 <form action="/participants/addRule" method="post">
                     <input type="hidden" name="participantId" value="${p.id}">
                     <input type="hidden" name="ruleType" value="N_DAY_CYCLE">
-                    기준일: <input type="date" name="baseDate" required>
-                    주기(일): <input type="number" name="cycleDays" value="2" min="2" style="width:60px;" required>
+                    기준일: <input type="date" name="baseDate" value="<%= java.time.LocalDate.now() %>" required>
+                    주기(일): <input type="number" name="cycleDays" value="3" min="2" style="width:60px;" required>
                     <button type="submit" class="btn" style="background:#007bff;">주기 규칙 추가</button>
                 </form>
             </div>
 
-            <h4 style="margin-top:20px;">현재 적용된 규칙</h4>
+            <h4 style="margin-top:20px;">현재 적용된 가용성 규칙</h4>
             <ul>
                 <c:forEach var="rule" items="${p.availabilityRules}">
                     <li>
                         <span>
                             <c:choose>
-                                <c:when test="${rule.ruleType == 'EVEN_DAYS'}"><strong>짝수 날짜</strong> 근무</c:when>
-                                <c:when test="${rule.ruleType == 'ODD_DAYS'}"><strong>홀수 날짜</strong> 근무</c:when>
+                                <c:when test="${rule.ruleType == 'EVEN_DAYS'}">
+                                    <strong>격일(1일째)</strong> 근무 (기준: ${rule.ruleValue})
+                                </c:when>
+                                <c:when test="${rule.ruleType == 'ODD_DAYS'}">
+                                    <strong>격일(2일째)</strong> 근무 (기준: ${rule.ruleValue})
+                                </c:when>
                                 <c:when test="${rule.ruleType == 'WEEKDAYS_ONLY'}"><strong>평일</strong>만 근무</c:when>
                                 <c:when test="${rule.ruleType == 'WEEKENDS_ONLY'}"><strong>주말</strong>만 근무</c:when>
                                 <c:when test="${rule.ruleType == 'N_DAY_CYCLE'}">
-                                    <strong>N일 주기:</strong> ${rule.ruleValue}
+                                    <strong>N일 주기:</strong> ${rule.ruleValue} (기준일:주기)
                                 </c:when>
                                 <c:otherwise>${rule.ruleType}</c:otherwise>
                             </c:choose>
@@ -106,7 +113,7 @@
                         </form>
                     </li>
                 </c:forEach>
-                <c:if test="${empty p.availabilityRules}"><li>등록된 규칙이 없습니다. (모든 날짜 가용)</li></c:if>
+                <c:if test="${empty p.availabilityRules}"><li>등록된 가용 규칙이 없습니다. (모든 날짜 가용 가능)</li></c:if>
             </ul>
         </div>
     </div>
