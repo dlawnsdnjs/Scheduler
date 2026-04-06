@@ -71,6 +71,23 @@ public class Participant {
         taskLastAssignedDates.put(taskId, date);
     }
 
+    /**
+     * 배정을 취소하고 통계를 업데이트하며, 해당 날짜를 불참 기간으로 등록합니다.
+     */
+    public void cancelAssignment(Long taskId, LocalDate date) {
+        taskTotalCounts.put(taskId, Math.max(0, getTaskCount(taskId) - 1));
+        addUnavailableRange(date, date);
+        // 취소된 후의 마지막 배정일은 서비스에서 다시 계산하여 설정하는 것이 안전하므로 여기서는 카운트만 조정합니다.
+    }
+
+    /**
+     * 특정 날짜 이후의 통계를 초기화하고 이전 기록을 바탕으로 마지막 배정일을 복구합니다.
+     */
+    public void resetStats(Long taskId, LocalDate sinceDate, int deletedCount, LocalDate lastDateBefore) {
+        taskTotalCounts.put(taskId, Math.max(0, getTaskCount(taskId) - deletedCount));
+        taskLastAssignedDates.put(taskId, lastDateBefore);
+    }
+
     public boolean isAvailable(LocalDate date) {
         // 1. 참여 가능 기간 체크 (입사일 ~ 퇴사일)
         if (date.isBefore(joinDate)) return false;

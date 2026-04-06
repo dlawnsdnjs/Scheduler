@@ -57,15 +57,14 @@ public class DistributionService {
 
         // 1. 통계 원복: 배분 시작일(start) 이전의 상태로 모든 참여자의 통계를 되돌림
         for (Participant p : allowedParticipants) {
-            long deletedCount = toDelete.stream().filter(a -> a.getParticipantId().equals(p.getId())).count();
-            p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - (int)deletedCount));
-
-            LocalDate lastDate = assignmentRepository.findByTaskIdAndAssignedDateBefore(taskId, start).stream()
+            int deletedCount = (int) toDelete.stream().filter(a -> a.getParticipantId().equals(p.getId())).count();
+            LocalDate lastDateBefore = assignmentRepository.findByTaskIdAndAssignedDateBefore(taskId, start).stream()
                     .filter(a -> a.getParticipantId().equals(p.getId()))
                     .map(ScheduleAssignment::getAssignedDate)
                     .max(LocalDate::compareTo)
                     .orElse(LocalDate.MIN);
-            p.getTaskLastAssignedDates().put(taskId, lastDate);
+            
+            p.resetStats(taskId, start, deletedCount, lastDateBefore);
             participantRepository.save(p);
         }
         assignmentRepository.deleteAll(toDelete);
@@ -98,8 +97,7 @@ public class DistributionService {
         LocalDate date = assignment.getAssignedDate();
         
         Participant p = participantRepository.findById(assignment.getParticipantId()).get();
-        p.addUnavailableRange(date, date);
-        p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - 1));
+        p.cancelAssignment(taskId, date);
 
         assignmentRepository.delete(assignment);
 
