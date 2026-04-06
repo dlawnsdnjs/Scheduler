@@ -71,7 +71,7 @@ public class DistributionService {
         assignmentRepository.deleteAll(toDelete);
 
         // 2. 배정 대상 날짜 생성 및 시간순 정렬
-        List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
+        List<LocalDate> targetDates = task.getTargetDates(start, end);
         Collections.sort(targetDates);
         
         if (targetDates.isEmpty()) return;
@@ -108,7 +108,7 @@ public class DistributionService {
         
         LocalDate start = date.withDayOfMonth(1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-        List<LocalDate> monthTargetDates = distributionEngine.getTargetDates(task, start, end);
+        List<LocalDate> monthTargetDates = task.getTargetDates(start, end);
         Map<Long, Integer> availableDaysCount = calculateAvailableDays(monthTargetDates, allowedParticipants);
 
         distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, true);

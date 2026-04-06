@@ -137,4 +137,30 @@ public class Participant {
         rule.setRuleValue(ruleValue);
         this.availabilityRules.add(rule);
     }
+
+    /**
+     * 특정 작업 및 날짜에 대한 배정 적합도 점수를 계산합니다.
+     * 점수가 높을수록 배정 우선순위가 높습니다.
+     */
+    public double calculateScore(Long taskId, LocalDate date, List<LocalDate> allOccurredDates, int totalParticipants, int maxTaskCount) {
+        // 간격(G) 계산: 실제 업무 발생 횟수 기준
+        LocalDate last = getLastDate(taskId);
+        long gap = (last == LocalDate.MIN) ? totalParticipants : (allOccurredDates.stream().filter(d -> d.isAfter(last) && d.isBefore(date)).count() + 1);
+
+        // 간격 점수: 전체 참여자 수(C)에 가까울수록 높은 점수
+        double gapScore = totalParticipants - Math.abs(gap - totalParticipants);
+        
+        // 균등 배정 보너스: 현재 작업 횟수가 최대 횟수보다 적을수록 가중치 부여
+        double balanceBonus = (maxTaskCount - getTaskCount(taskId)) * (double) totalParticipants;
+
+        return gapScore + balanceBonus;
+    }
+
+    /**
+     * 실제 업무 발생 횟수 기준 간격을 계산합니다.
+     */
+    public long calculateGap(Long taskId, LocalDate date, List<LocalDate> allOccurredDates, int totalParticipants) {
+        LocalDate last = getLastDate(taskId);
+        return (last == LocalDate.MIN) ? totalParticipants : (allOccurredDates.stream().filter(d -> d.isAfter(last) && d.isBefore(date)).count() + 1);
+    }
 }

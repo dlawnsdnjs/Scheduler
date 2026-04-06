@@ -24,30 +24,6 @@ public class DistributionEngine {
     private final ScheduleAssignmentRepository assignmentRepository;
     private final TaskDefinitionRepository taskRepository;
 
-    public List<LocalDate> getTargetDates(TaskDefinition task, LocalDate start, LocalDate end) {
-        List<LocalDate> dates = new ArrayList<>();
-        LocalDate current = start;
-
-        if ("WEEKLY".equals(task.getCycleType())) {
-            Set<DayOfWeek> targetDays = Arrays.stream(task.getCycleValue().split(","))
-                    .map(String::trim)
-                    .map(this::parseKoreanDay)
-                    .collect(Collectors.toSet());
-
-            while (!current.isAfter(end)) {
-                if (targetDays.contains(current.getDayOfWeek())) dates.add(current);
-                current = current.plusDays(1);
-            }
-        } else if ("INTERVAL".equals(task.getCycleType())) {
-            int interval = Integer.parseInt(task.getCycleValue());
-            while (!current.isAfter(end)) {
-                dates.add(current);
-                current = current.plusDays(interval);
-            }
-        }
-        return dates;
-    }
-
     public void distributeOptimized(TaskDefinition task, List<LocalDate> targetDates, List<Participant> participants) {
         log.info("Starting Scored Distribution for task: {}", task.getTaskName());
         
@@ -84,14 +60,10 @@ public class DistributionEngine {
                 // 충돌 체크
                 if (conflictingAssignments.stream().anyMatch(a -> a.getParticipantId().equals(p.getId()))) continue;
 
-                // 간격(G) 계산: 실제 업무 발생 횟수 기준
-                LocalDate last = p.getLastDate(task.getId());
-                long G = (last == LocalDate.MIN) ? C : (allOccurredDates.stream().filter(d -> d.isAfter(last) && d.isBefore(date)).count() + 1);
+                double score = p.calculateScore(task.getId(), date, allOccurredDates, C, maxCount);
+                long gap = p.calculateGap(task.getId(), date, allOccurredDates, C);
 
-                double gapScore = C - Math.abs(G - C);
-                double balanceBonus = (maxCount - p.getTaskCount(task.getId())) * (double)C;
-
-                candidates.add(new ParticipantScore(p, gapScore + balanceBonus, G));
+                candidates.add(new ParticipantScore(p, score, gap));
             }
 
             candidates.sort(Comparator.comparingDouble(ParticipantScore::getScore).reversed());
@@ -124,18 +96,5 @@ public class DistributionEngine {
         long gap;
         ParticipantScore(Participant p, double score, long gap) { this.p = p; this.score = score; this.gap = gap; }
         double getScore() { return score; }
-    }
-
-    private DayOfWeek parseKoreanDay(String day) {
-        return switch (day) {
-            case "월", "MON" -> DayOfWeek.MONDAY;
-            case "화", "TUE" -> DayOfWeek.TUESDAY;
-            case "수", "WED" -> DayOfWeek.WEDNESDAY;
-            case "목", "THU" -> DayOfWeek.THURSDAY;
-            case "금", "FRI" -> DayOfWeek.FRIDAY;
-            case "토", "SAT" -> DayOfWeek.SATURDAY;
-            case "일", "SUN" -> DayOfWeek.SUNDAY;
-            default -> throw new IllegalArgumentException("지원하지 않는 요일 형식: " + day);
-        };
     }
 }

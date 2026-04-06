@@ -5,8 +5,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "task_definitions")
@@ -55,5 +60,47 @@ public class TaskDefinition {
         this.cycleType = cycleType;
         this.cycleValue = cycleValue;
         this.requiredParticipantsPerDay = requiredParticipantsPerDay;
+    }
+
+    /**
+     * 작업 정의에 따른 배정 대상 날짜 리스트를 생성합니다.
+     */
+    public List<LocalDate> getTargetDates(LocalDate start, LocalDate end) {
+        List<LocalDate> dates = new ArrayList<>();
+        LocalDate current = start;
+
+        if ("WEEKLY".equals(this.cycleType)) {
+            Set<DayOfWeek> targetDays = Arrays.stream(this.cycleValue.split(","))
+                    .map(String::trim)
+                    .map(this::parseKoreanDay)
+                    .collect(Collectors.toSet());
+
+            while (!current.isAfter(end)) {
+                if (targetDays.contains(current.getDayOfWeek())) {
+                    dates.add(current);
+                }
+                current = current.plusDays(1);
+            }
+        } else if ("INTERVAL".equals(this.cycleType)) {
+            int interval = Integer.parseInt(this.cycleValue);
+            while (!current.isAfter(end)) {
+                dates.add(current);
+                current = current.plusDays(interval);
+            }
+        }
+        return dates;
+    }
+
+    private DayOfWeek parseKoreanDay(String day) {
+        return switch (day.toUpperCase()) {
+            case "월", "MON" -> DayOfWeek.MONDAY;
+            case "화", "TUE" -> DayOfWeek.TUESDAY;
+            case "수", "WED" -> DayOfWeek.WEDNESDAY;
+            case "목", "THU" -> DayOfWeek.THURSDAY;
+            case "금", "FRI" -> DayOfWeek.FRIDAY;
+            case "토", "SAT" -> DayOfWeek.SATURDAY;
+            case "일", "SUN" -> DayOfWeek.SUNDAY;
+            default -> throw new IllegalArgumentException("지원하지 않는 요일 형식: " + day);
+        };
     }
 }
