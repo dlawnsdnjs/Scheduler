@@ -103,4 +103,11 @@ public class TaskDefinition {
             default -> throw new IllegalArgumentException("지원하지 않는 요일 형식: " + day);
         };
     }
+
+    public void addConflict(TaskDefinition other) {
+        if (!this.conflictingTasks.contains(other)) {
+            this.conflictingTasks.add(other);
+            other.getConflictingTasks().add(this);
+        }
+    }
 }
