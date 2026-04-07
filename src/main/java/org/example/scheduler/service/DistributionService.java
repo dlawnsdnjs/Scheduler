@@ -39,9 +39,26 @@ public class DistributionService {
 
     @Transactional
     public void distribute(List<Long> taskIds, LocalDate start, LocalDate end) {
-        if (taskIds == null) return;
-        for (Long taskId : taskIds) {
-            distribute(taskId, start, end);
+        if (taskIds == null || taskIds.isEmpty()) return;
+
+        List<TaskDefinition> tasks = taskRepository.findAllById(taskIds);
+        List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdInAndAssignedDateBetweenAndStatus(taskIds, start, end, AssignmentStatus.AUTOMATIC);
+        
+        Map<Long, List<ScheduleAssignment>> assignmentMap = toDelete.stream()
+            .collect(Collectors.groupingBy(a -> a.getTask().getId()));
+
+        for (TaskDefinition task : tasks) {
+            List<Participant> allowedParticipants = task.getAllowedParticipants();
+            if (allowedParticipants.isEmpty()) continue;
+            
+            performStatsReset(task, allowedParticipants, assignmentMap.getOrDefault(task.getId(), new ArrayList<>()), start);
+
+            List<LocalDate> targetDates = task.getTargetDates(start, end);
+            Collections.sort(targetDates);
+            
+            if (targetDates.isEmpty()) continue;
+
+            distributionEngine.distributeOptimized(task, targetDates, allowedParticipants);
         }
     }
 

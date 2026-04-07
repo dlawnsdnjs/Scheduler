@@ -15,6 +15,8 @@ import java.util.List;
 public interface ScheduleAssignmentRepository extends JpaRepository<ScheduleAssignment, Long> {
     List<ScheduleAssignment> findByTaskId(Long taskId);
     List<ScheduleAssignment> findByTaskIdAndAssignedDateBefore(Long taskId, LocalDate date);
+    List<ScheduleAssignment> findByTaskIdInAndAssignedDateBetweenAndStatus(List<Long> taskIds, LocalDate start, LocalDate end, AssignmentStatus status);
+    List<ScheduleAssignment> findByTaskIdIn(List<Long> taskIds);
     List<ScheduleAssignment> findByTaskIdAndAssignedDateBetweenAndStatus(Long taskId, LocalDate start, LocalDate end, AssignmentStatus status);
     List<ScheduleAssignment> findByTaskIdAndAssignedDateBetween(Long taskId, LocalDate start, LocalDate end);
     List<ScheduleAssignment> findByAssignedDateBetween(LocalDate start, LocalDate end);
