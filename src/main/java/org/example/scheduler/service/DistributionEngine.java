@@ -25,10 +25,7 @@ public class DistributionEngine {
         if (participants.isEmpty()) return;
 
         // 1. 충돌 업무 ID 세트 구성 (양방향성 보장 및 효율적 필터링)
-        Set<Long> conflictIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toSet());
-        taskRepository.findAll().stream()
-                .filter(t -> t.getConflictingTasks().stream().anyMatch(ct -> ct.getId().equals(task.getId())))
-                .forEach(t -> conflictIds.add(t.getId()));
+        List<Long> conflictIds = task.getConflictingTasks().stream().map(TaskDefinition::getId).collect(Collectors.toList());
 
         // 2. 해당 업무의 과거 배정 이력 로드 (간격 계산용)
         List<LocalDate> allOccurredDates = assignmentRepository.findByTaskId(task.getId()).stream()
@@ -37,13 +34,14 @@ public class DistributionEngine {
                 .sorted()
                 .collect(Collectors.toCollection(ArrayList::new));
 
+        List<ScheduleAssignment> assignments = assignmentRepository.findByTaskIdInAndAssignedDateInAndParticipantIdIn(conflictIds,targetDates, participants);
         for (LocalDate date : targetDates) {
             int needed = task.getRequiredParticipantsPerDay();
             int maxCount = participants.stream().mapToInt(p -> p.getTaskCount(task.getId())).max().orElse(0);
 
             // 3. 해당 날짜의 충돌 업무 배정 정보 조회
-            List<ScheduleAssignment> conflictingAssignments = assignmentRepository.findByAssignedDateBetween(date, date).stream()
-                    .filter(a -> conflictIds.contains(a.getTaskId()))
+            List<ScheduleAssignment> conflictingAssignments = assignments.stream()
+                    .filter(a -> a.getAssignedDate() == date)
                     .toList();
 
             // 4. 일급 컬렉션(CandidateGroup)을 활용한 후보군 선출
@@ -55,7 +53,7 @@ public class DistributionEngine {
 
             // 5. 최종 배정 및 이력 업데이트
             for (Candidate cand : selectedCandidates) {
-                ScheduleAssignment sa = new ScheduleAssignment(task.getId(), date, cand.getParticipantId());
+                ScheduleAssignment sa = new ScheduleAssignment(task, date, cand.getParticipant());
                 sa.setStatus(AssignmentStatus.AUTOMATIC);
                 sa.setNote(String.format("점수:%.1f, 간격:%d회", cand.getScore(), cand.getGap()));
                 

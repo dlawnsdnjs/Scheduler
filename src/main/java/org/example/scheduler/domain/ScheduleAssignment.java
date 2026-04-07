@@ -18,14 +18,16 @@ public class ScheduleAssignment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private Long taskId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "task_id", nullable = false)
+    private TaskDefinition task;
 
     @Column(nullable = false)
     private LocalDate assignedDate;
 
-    @Column(nullable = false)
-    private Long participantId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "participant_id", nullable = false)
+    private Participant participant;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -33,9 +35,12 @@ public class ScheduleAssignment {
 
     private String note;
 
-    public ScheduleAssignment(Long taskId, LocalDate assignedDate, Long participantId) {
-        this.taskId = taskId;
+    public ScheduleAssignment(TaskDefinition task, LocalDate assignedDate, Participant participant) {
+        this.task = task;
         this.assignedDate = assignedDate;
-        this.participantId = participantId;
+        this.participant = participant;
     }
+
+    public Long getTaskId() { return task.getId(); }
+    public Long getParticipantId() { return participant.getId(); }
 }

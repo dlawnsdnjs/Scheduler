@@ -196,7 +196,7 @@ public class DataMigrationService {
                     // 중복 체크 (동일 날짜, 동일 업무, 동일 인원)
                     List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(t.getId(), ad.getAssignedDate(), ad.getAssignedDate());
                     if (existing.stream().noneMatch(ex -> ex.getParticipantId().equals(p.getId()))) {
-                        ScheduleAssignment sa = new ScheduleAssignment(t.getId(), ad.getAssignedDate(), p.getId());
+                        ScheduleAssignment sa = new ScheduleAssignment(t, ad.getAssignedDate(), p);
                         sa.setStatus(AssignmentStatus.valueOf(ad.getStatus()));
                         sa.setNote(ad.getNote());
                         assignmentRepository.save(sa);
