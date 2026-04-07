@@ -35,29 +35,26 @@ public class DistributionEngine {
                 .collect(Collectors.toCollection(ArrayList::new));
 
         List<ScheduleAssignment> assignments = assignmentRepository.findByTaskIdInAndAssignedDateInAndParticipantIdIn(conflictIds,targetDates, participants);
+        List<ScheduleAssignment> newAssignments = new ArrayList<>();
         for (LocalDate date : targetDates) {
             int needed = task.getRequiredParticipantsPerDay();
             int maxCount = participants.stream().mapToInt(p -> p.getTaskCount(task.getId())).max().orElse(0);
 
-            // 3. 해당 날짜의 충돌 업무 배정 정보 조회
             List<ScheduleAssignment> conflictingAssignments = assignments.stream()
-                    .filter(a -> a.getAssignedDate() == date)
+                    .filter(a -> a.getAssignedDate().equals(date))
                     .toList();
 
-            // 4. 일급 컬렉션(CandidateGroup)을 활용한 후보군 선출
             List<Candidate> selectedCandidates = CandidateGroup.from(participants)
                     .filterAvailable(date)
                     .excludeConflicting(conflictingAssignments)
                     .scoreAll(task, date, allOccurredDates, maxCount)
                     .getTopCandidates(needed);
 
-            // 5. 최종 배정 및 이력 업데이트
             for (Candidate cand : selectedCandidates) {
                 ScheduleAssignment sa = new ScheduleAssignment(task, date, cand.getParticipant());
                 sa.setStatus(AssignmentStatus.AUTOMATIC);
                 sa.setNote(String.format("점수:%.1f, 간격:%d회", cand.getScore(), cand.getGap()));
-                
-                assignmentRepository.save(sa);
+                newAssignments.add(sa);
                 cand.getParticipant().incrementTaskCount(task.getId(), date);
             }
             
@@ -66,6 +63,7 @@ public class DistributionEngine {
                 Collections.sort(allOccurredDates);
             }
         }
+        assignmentRepository.saveAll(newAssignments);
     }
 
     public void assignForDate(TaskDefinition task, LocalDate date, List<Participant> participants, Map<Long, Integer> availableDaysCount, boolean shouldSave) {
