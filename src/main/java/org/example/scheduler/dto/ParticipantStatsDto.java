@@ -25,4 +25,10 @@ public class ParticipantStatsDto {
         this.taskTotalCounts = taskTotalCounts;
         this.taskLastAssignedDates = taskLastAssignedDates;
     }
+
+    public ParticipantStatsDto(String name, int count, LocalDate lastDate) {
+        this.name = name;
+        this.count = count;
+        this.lastDate = lastDate;
+    }
 }

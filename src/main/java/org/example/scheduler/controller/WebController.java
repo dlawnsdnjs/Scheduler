@@ -29,6 +29,7 @@ public class WebController {
     private final TaskService taskService;
     private final ParticipantService participantService;
     private final DataMigrationService dataMigrationService;
+    private final CalendarViewAssembler calendarViewAssembler;
 
     @GetMapping("/")
     public String index(
@@ -42,63 +43,11 @@ public class WebController {
         int targetYear = (year == null) ? now.getYear() : year;
         int targetMonth = (month == null) ? now.getMonthValue() : month;
 
-        LocalDate firstDay = LocalDate.of(targetYear, targetMonth, 1);
-        int dayOfWeekValue = firstDay.getDayOfWeek().getValue(); 
-        if (dayOfWeekValue == 7) dayOfWeekValue = 0; 
-
-        List<List<LocalDate>> weeks = new ArrayList<>();
-        List<LocalDate> currentWeek = new ArrayList<>();
-        for (int i = 0; i < dayOfWeekValue; i++) currentWeek.add(null);
-        int lengthOfMonth = firstDay.lengthOfMonth();
-        for (int day = 1; day <= lengthOfMonth; day++) {
-            currentWeek.add(LocalDate.of(targetYear, targetMonth, day));
-            if (currentWeek.size() == 7) { weeks.add(currentWeek); currentWeek = new ArrayList<>(); }
-        }
-        if (!currentWeek.isEmpty()) { while (currentWeek.size() < 7) currentWeek.add(null); weeks.add(currentWeek); }
-
         List<CalendarAssignmentDto> assignments = distributionService.getCalendarAssignments(targetYear, targetMonth, filterTaskId, filterParticipantId);
-        Map<String, List<CalendarAssignmentDto.AssignmentDetailDto>> assignmentsMap = assignments.stream()
-                .collect(Collectors.toMap(
-                        a -> a.getDate().toString(),
-                        CalendarAssignmentDto::getAssignments,
-                        (existing, replacement) -> existing // 중복 키 발생 시 기존 값 유지 (데이터 일관성 확보)
-                ));
-
-        model.addAttribute("year", targetYear);
-        model.addAttribute("month", targetMonth);
-        model.addAttribute("calendarWeeks", weeks);
-        model.addAttribute("assignmentsMap", assignmentsMap);
         
-        model.addAttribute("tasks", taskService.findAll());
-        model.addAttribute("participants", participantService.findAll());
-        model.addAttribute("filterTaskId", filterTaskId);
-        model.addAttribute("filterParticipantId", filterParticipantId);
-
-        // 업무별 사이클 현황 데이터 (Key를 Long으로 유지하여 JSP EL에서의 호환성 및 성능 최적화)
-        List<org.example.scheduler.domain.TaskDefinition> allTasks = taskService.findAll();
-        Map<Long, List<org.example.scheduler.dto.ParticipantStatsDto>> taskCycleStats = allTasks.stream().collect(Collectors.toMap(
-                org.example.scheduler.domain.TaskDefinition::getId,
-                task -> task.getAllowedParticipants().stream()
-                        .map(p -> {
-                            org.example.scheduler.dto.ParticipantStatsDto dto = new org.example.scheduler.dto.ParticipantStatsDto();
-                            dto.setName(p.getName());
-                            dto.setCount(p.getTaskCount(task.getId()));
-                            dto.setLastDate(p.getLastDate(task.getId()));
-                            return dto;
-                        })
-                        .sorted(java.util.Comparator.comparing((org.example.scheduler.dto.ParticipantStatsDto d) -> d.getLastDate())
-                                .thenComparing(org.example.scheduler.dto.ParticipantStatsDto::getCount))
-                        .collect(Collectors.toList())
-        ));
-        model.addAttribute("taskCycleStats", taskCycleStats);
-
-        LocalDate currentMonth = LocalDate.of(targetYear, targetMonth, 1);
-        LocalDate prev = currentMonth.minusMonths(1);
-        LocalDate next = currentMonth.plusMonths(1);
-        model.addAttribute("prevYear", prev.getYear());
-        model.addAttribute("prevMonth", prev.getMonthValue());
-        model.addAttribute("nextYear", next.getYear());
-        model.addAttribute("nextMonth", next.getMonthValue());
+        model.addAttribute("vm", calendarViewAssembler.assemble(
+                targetYear, targetMonth, filterTaskId, filterParticipantId, 
+                assignments, taskService.findAll(), participantService.findAll()));
 
         return "index";
     }

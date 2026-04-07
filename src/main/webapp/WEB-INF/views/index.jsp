@@ -126,7 +126,7 @@
                 참여자 필터: 
                 <select name="filterParticipantId" onchange="this.form.submit()">
                     <option value="">전체 참여자</option>
-                    <c:forEach var="p" items="${participants}">
+                    <c:forEach var="p" items="${vm.participants}">
                         <option value="${p.id}" ${filterParticipantId == p.id ? 'selected' : ''}>${p.name}</option>
                     </c:forEach>
                 </select>
@@ -191,7 +191,7 @@
                                                     <input type="hidden" name="month" value="${month}">
                                                     <select name="participantId" style="width:100%; font-size:0.9em;" onchange="this.form.submit()">
                                                         <option value="">변경...</option>
-                                                        <c:forEach var="p" items="${participants}">
+                                                        <c:forEach var="p" items="${vm.participants}">
                                                             <option value="${p.id}">${p.name}</option>
                                                         </c:forEach>
                                                     </select>
@@ -216,7 +216,7 @@
                                             
                                             <select name="participantId" style="width:100%; margin-bottom:3px; font-size:0.85em;" required>
                                                 <option value="">참여자 선택...</option>
-                                                <c:forEach var="p" items="${participants}">
+                                                <c:forEach var="p" items="${vm.participants}">
                                                     <option value="${p.id}">${p.name}</option>
                                                 </c:forEach>
                                             </select>
@@ -238,5 +238,8 @@
             form.style.display = (form.style.display === 'block') ? 'none' : 'block';
         }
     </script>
+</body>
+</html>
+>
 </body>
 </html>
