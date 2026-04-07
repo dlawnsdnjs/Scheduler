@@ -53,6 +53,12 @@ public class Participant {
         this.joinDate = joinDate;
     }
 
+    public void clearAssociations(List<TaskDefinition> tasks) {
+        for (TaskDefinition task : tasks) {
+            task.getAllowedParticipants().remove(this);
+        }
+    }
+
     public void addUnavailableRange(LocalDate start, LocalDate end) {
         UnavailableRange range = new UnavailableRange(this, start, end);
         this.unavailableRanges.add(range);

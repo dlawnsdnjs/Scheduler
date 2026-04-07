@@ -40,25 +40,15 @@ public class ParticipantService {
     public void deleteParticipant(Long id) {
         Participant p = findById(id);
 
-        // 1. 업무 허용 목록에서 제거
-        List<TaskDefinition> tasks = taskRepository.findAll();
-        for (TaskDefinition task : tasks) {
-            if (task.getAllowedParticipants().contains(p)) {
-                task.getAllowedParticipants().remove(p);
-                taskRepository.save(task);
-            }
-        }
+        // 1. 엔티티 스스로 관계 정리
+        p.clearAssociations(taskRepository.findAll());
 
-        // 2. 배정 기록 삭제 (참여자 ID 기반)
-        // ScheduleAssignmentRepository에 해당 참여자 ID로 삭제하는 메서드가 필요할 수 있음
-        // 여기서는 수동으로 필터링하여 삭제하거나 Repository 메서드 호출
-        assignmentRepository.deleteAll(
-            assignmentRepository.findAll().stream()
-                .filter(a -> a.getParticipantId().equals(id))
-                .toList()
-        );
+        // 2. 배정 기록 삭제
+        assignmentRepository.deleteAll(assignmentRepository.findAll().stream()
+                .filter(a -> a.getParticipant().getId().equals(id))
+                .toList());
 
-        // 3. 참여자 삭제 (CascadeType.ALL에 의해 규칙/기간도 자동 삭제됨)
+        // 3. 참여자 삭제
         participantRepository.delete(p);
     }
 
