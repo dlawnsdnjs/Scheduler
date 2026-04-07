@@ -24,17 +24,19 @@ public class DistributionService {
 
     @Transactional
     public void distribute(List<Long> taskIds, int year, int month) {
-        if (taskIds == null) return;
-        for (Long taskId : taskIds) {
-            distribute(taskId, year, month);
-        }
+        LocalDate start = LocalDate.of(year, month, 1);
+        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+        distribute(taskIds, start, end);
     }
 
     @Transactional
     public void distribute(Long taskId, int year, int month) {
-        LocalDate start = LocalDate.of(year, month, 1);
-        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-        distribute(taskId, start, end);
+        distribute(Collections.singletonList(taskId), year, month);
+    }
+
+    @Transactional
+    public void distribute(Long taskId, LocalDate start, LocalDate end) {
+        distribute(Collections.singletonList(taskId), start, end);
     }
 
     @Transactional
@@ -60,27 +62,6 @@ public class DistributionService {
 
             distributionEngine.distributeOptimized(task, targetDates, allowedParticipants);
         }
-    }
-
-    @Transactional
-    public void distribute(Long taskId, LocalDate start, LocalDate end) {
-        TaskDefinition task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found"));
-
-        List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetweenAndStatus(taskId, start, end, AssignmentStatus.AUTOMATIC);
-        List<Participant> allowedParticipants = task.getAllowedParticipants();
-
-        if (allowedParticipants.isEmpty()) return;
-        performStatsReset(task, allowedParticipants, toDelete, start);
-
-        // 2. 배정 대상 날짜 생성 및 시간순 정렬
-        List<LocalDate> targetDates = task.getTargetDates(start, end);
-        Collections.sort(targetDates);
-        
-        if (targetDates.isEmpty()) return;
-
-        // 3. 최적화 배정 수행 (간격 점수 합산 최대화)
-        distributionEngine.distributeOptimized(task, targetDates, allowedParticipants);
     }
 
     // 실제 '원복' 작업만 담당하는 Private Helper (인자로 넘겨받음)
