@@ -98,27 +98,30 @@ public class DistributionService {
     }
 
     @Transactional
-    public void cancelAndReplace(Long assignmentId) {
+    public void reassignAssignment(Long assignmentId) {
         ScheduleAssignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("Assignment not found"));
         
-        Long taskId = assignment.getTaskId();
-        LocalDate date = assignment.getAssignedDate();
-        
-        Participant p = participantRepository.findById(assignment.getParticipantId()).get();
-        p.cancelAssignment(taskId, date);
+        // 1. 기존 배정 취소
+        cancelAssignment(assignment);
 
-        assignmentRepository.delete(assignment);
-
-        TaskDefinition task = taskRepository.findById(taskId).get();
+        // 2. 새로운 배정 시도
+        TaskDefinition task = assignment.getTask();
         List<Participant> allowedParticipants = task.getAllowedParticipants();
         
-        LocalDate start = date.withDayOfMonth(1);
+        LocalDate start = assignment.getAssignedDate().withDayOfMonth(1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-        List<LocalDate> monthTargetDates = task.getTargetDates(start, end);
-        Map<Long, Integer> availableDaysCount = calculateAvailableDays(monthTargetDates, allowedParticipants);
+        
+        List<LocalDate> targetDates = task.getTargetDates(start, end);
+        Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
 
-        distributionEngine.assignForDate(task, date, allowedParticipants, availableDaysCount, true);
+        distributionEngine.assignForDate(task, assignment.getAssignedDate(), allowedParticipants, availableDaysCount, true);
+    }
+
+    private void cancelAssignment(ScheduleAssignment assignment) {
+        Participant p = assignment.getParticipant();
+        p.cancelAssignment(assignment.getTask().getId(), assignment.getAssignedDate());
+        assignmentRepository.delete(assignment);
     }
 
     @Transactional(readOnly = true)

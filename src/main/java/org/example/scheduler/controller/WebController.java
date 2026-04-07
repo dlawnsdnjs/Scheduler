@@ -254,9 +254,9 @@ public class WebController {
         return "redirect:/?year=" + year + "&month=" + month;
     }
 
-    @PostMapping("/assignments/cancel")
-    public String cancelAndReplace(Long id, int year, int month) {
-        distributionService.cancelAndReplace(id);
+    @PostMapping("/assignments/reassign")
+    public String reassign(Long id, int year, int month) {
+        distributionService.reassignAssignment(id);
         return "redirect:/?year=" + year + "&month=" + month;
     }
 

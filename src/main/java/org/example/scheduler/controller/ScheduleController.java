@@ -35,4 +35,10 @@ public class ScheduleController {
         distributionService.swapAssignments(assignmentId1, assignmentId2);
         return ResponseEntity.ok().build();
     }
+
+    @PostMapping("/reassign")
+    public ResponseEntity<Void> reassign(@RequestParam Long assignmentId) {
+        distributionService.reassignAssignment(assignmentId);
+        return ResponseEntity.ok().build();
+    }
 }
