@@ -49,6 +49,7 @@ public class DistributionService {
         // 1. 배정 삭제 및 통계 동기화
         deleteAssignmentsAndSyncStats(toDelete);
 
+        List<ScheduleAssignment> allNewAssignments = new ArrayList<>();
         for (TaskDefinition task : tasks) {
             List<Participant> allowedParticipants = task.getAllowedParticipants();
             if (allowedParticipants.isEmpty()) continue;
@@ -58,7 +59,7 @@ public class DistributionService {
             
             if (targetDates.isEmpty()) continue;
 
-            distributionEngine.distributeOptimized(task, targetDates, allowedParticipants);
+            distributionEngine.distributeOptimized(task, targetDates, allowedParticipants, allNewAssignments);
         }
     }
 
