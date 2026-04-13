@@ -2,6 +2,7 @@ package org.example.scheduler.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.example.scheduler.dto.CalendarAssignmentDto;
+import org.example.scheduler.dto.CalendarViewModel;
 import org.example.scheduler.service.*;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -45,9 +46,23 @@ public class WebController {
 
         List<CalendarAssignmentDto> assignments = distributionService.getCalendarAssignments(targetYear, targetMonth, filterTaskId, filterParticipantId);
         
-        model.addAttribute("vm", calendarViewAssembler.assemble(
+        CalendarViewModel vm = calendarViewAssembler.assemble(
                 targetYear, targetMonth, filterTaskId, filterParticipantId, 
-                assignments, taskService.findAll(), participantService.findAll()));
+                assignments, taskService.findAll(), participantService.findAll());
+
+        model.addAttribute("vm", vm);
+        model.addAttribute("year", vm.getYear());
+        model.addAttribute("month", vm.getMonth());
+        model.addAttribute("calendarWeeks", vm.getCalendarWeeks());
+        model.addAttribute("assignmentsMap", vm.getAssignmentsMap());
+        model.addAttribute("tasks", vm.getTasks());
+        model.addAttribute("taskCycleStats", vm.getTaskCycleStats());
+        model.addAttribute("prevYear", vm.getPrevYear());
+        model.addAttribute("prevMonth", vm.getPrevMonth());
+        model.addAttribute("nextYear", vm.getNextYear());
+        model.addAttribute("nextMonth", vm.getNextMonth());
+        model.addAttribute("filterTaskId", vm.getFilterTaskId());
+        model.addAttribute("filterParticipantId", vm.getFilterParticipantId());
 
         return "index";
     }

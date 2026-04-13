@@ -168,7 +168,7 @@
                                             </span>
                                             
                                             <div class="action-btns">
-                                                <form action="/assignments/cancel" method="post" style="display:inline;">
+                                                <form action="/assignments/reassign" method="post" style="display:inline;">
                                                     <input type="hidden" name="id" value="${assign.assignmentId}">
                                                     <input type="hidden" name="year" value="${year}">
                                                     <input type="hidden" name="month" value="${month}">
