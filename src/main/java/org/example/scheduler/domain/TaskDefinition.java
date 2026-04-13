@@ -27,11 +27,12 @@ public class TaskDefinition {
     @Column(nullable = false)
     private String taskName;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String cycleType; // WEEKLY, INTERVAL, etc.
+    private CycleType cycleType;
 
     @Column(nullable = false)
-    private String cycleValue; // JSON representation of rules or comma-separated days
+    private String cycleValue;
 
     @Column(nullable = false)
     private int requiredParticipantsPerDay = 1;
@@ -55,7 +56,7 @@ public class TaskDefinition {
     )
     private List<TaskDefinition> conflictingTasks = new ArrayList<>();
 
-    public TaskDefinition(String taskName, String cycleType, String cycleValue, int requiredParticipantsPerDay) {
+    public TaskDefinition(String taskName, CycleType cycleType, String cycleValue, int requiredParticipantsPerDay) {
         this.taskName = taskName;
         this.cycleType = cycleType;
         this.cycleValue = cycleValue;
@@ -69,7 +70,7 @@ public class TaskDefinition {
         List<LocalDate> dates = new ArrayList<>();
         LocalDate current = start;
 
-        if ("WEEKLY".equals(this.cycleType)) {
+        if (this.cycleType == CycleType.WEEKLY) {
             Set<DayOfWeek> targetDays = Arrays.stream(this.cycleValue.split(","))
                     .map(String::trim)
                     .map(this::parseKoreanDay)
@@ -81,7 +82,7 @@ public class TaskDefinition {
                 }
                 current = current.plusDays(1);
             }
-        } else if ("INTERVAL".equals(this.cycleType)) {
+        } else if (this.cycleType == CycleType.INTERVAL) {
             int interval = Integer.parseInt(this.cycleValue);
             while (!current.isAfter(end)) {
                 dates.add(current);

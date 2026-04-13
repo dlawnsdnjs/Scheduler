@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TaskDefinitionTest {
     @Test
     void testGetTargetDatesWeekly() {
-        TaskDefinition task = new TaskDefinition("WeeklyTask", "WEEKLY", "월,수,금", 1);
+        TaskDefinition task = new TaskDefinition("WeeklyTask", CycleType.WEEKLY, "월,수,금", 1);
         LocalDate start = LocalDate.of(2026, 4, 1); // 수요일
         LocalDate end = LocalDate.of(2026, 4, 7);   // 화요일
         
@@ -21,7 +21,7 @@ class TaskDefinitionTest {
 
     @Test
     void testGetTargetDatesInterval() {
-        TaskDefinition task = new TaskDefinition("IntervalTask", "INTERVAL", "2", 1);
+        TaskDefinition task = new TaskDefinition("IntervalTask", CycleType.INTERVAL, "2", 1);
         LocalDate start = LocalDate.of(2026, 4, 1);
         LocalDate end = LocalDate.of(2026, 4, 5);
         

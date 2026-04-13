@@ -49,8 +49,8 @@ public class DataImporter {
     private void importTasks(List<ExportDataDto.TaskDefinitionDataDto> dtos) {
         for (ExportDataDto.TaskDefinitionDataDto td : dtos) {
             TaskDefinition t = taskRepository.findByTaskName(td.getTaskName())
-                    .orElse(new TaskDefinition(td.getTaskName(), td.getCycleType(), td.getCycleValue(), td.getRequiredParticipantsPerDay()));
-            t.setCycleType(td.getCycleType());
+                    .orElse(new TaskDefinition(td.getTaskName(), CycleType.valueOf(td.getCycleType()), td.getCycleValue(), td.getRequiredParticipantsPerDay()));
+            t.setCycleType(CycleType.valueOf(td.getCycleType()));
             t.setCycleValue(td.getCycleValue());
             t.setRequiredParticipantsPerDay(td.getRequiredParticipantsPerDay());
             t.setColor(td.getColor());

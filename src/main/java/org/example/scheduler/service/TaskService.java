@@ -3,6 +3,7 @@ package org.example.scheduler.service;
 import lombok.RequiredArgsConstructor;
 import org.example.scheduler.domain.Participant;
 import org.example.scheduler.domain.TaskDefinition;
+import org.example.scheduler.domain.CycleType;
 import org.example.scheduler.repository.ParticipantRepository;
 import org.example.scheduler.repository.ScheduleAssignmentRepository;
 import org.example.scheduler.repository.TaskDefinitionRepository;
@@ -33,7 +34,7 @@ public class TaskService {
 
     @Transactional
     public void addTask(String name, String cycleType, String cycleValue, int required, String color, List<Long> participantIds) {
-        TaskDefinition task = new TaskDefinition(name, cycleType, cycleValue, required);
+        TaskDefinition task = new TaskDefinition(name, CycleType.valueOf(cycleType), cycleValue, required);
         task.setColor(color);
         if (participantIds != null) {
             task.setAllowedParticipants(participantRepository.findAllById(participantIds));
@@ -60,7 +61,7 @@ public class TaskService {
 public void updateTask(Long taskId, String name, String cycleType, String cycleValue, int required, String color) {
     TaskDefinition task = findById(taskId);
     task.setTaskName(name);
-    task.setCycleType(cycleType);
+    task.setCycleType(CycleType.valueOf(cycleType));
     task.setCycleValue(cycleValue);
     task.setRequiredParticipantsPerDay(required);
     task.setColor(color);

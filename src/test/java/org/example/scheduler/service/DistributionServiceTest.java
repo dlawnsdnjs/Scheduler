@@ -37,7 +37,7 @@ class DistributionServiceTest {
     @BeforeEach
     void setUp() {
         // 하루 1명만 필요한 업무로 설정하여 가용성 테스트를 단순화
-        TaskDefinition task = new TaskDefinition("청소", "WEEKLY", "MON,TUE,WED,THU,FRI", 1);
+        TaskDefinition task = new TaskDefinition("청소", CycleType.WEEKLY, "MON,TUE,WED,THU,FRI", 1);
         taskId = taskRepository.save(task).getId();
 
         Participant p1 = new Participant("홍길동", LocalDate.of(2026, 1, 1));
@@ -80,20 +80,18 @@ class DistributionServiceTest {
     void swapTest() {
         Participant p1 = participantRepository.findAll().stream().filter(p -> p.getName().equals("홍길동")).findFirst().get();
         Participant p2 = participantRepository.findAll().stream().filter(p -> p.getName().equals("이영희")).findFirst().get();
-        
-        // 교체 가능한 날짜 설정 (둘 다 가용한 날짜 선택)
-        // 2026-03-02 (월) : daysBetween 60 (짝수) -> 둘 다 가용
-        // 2026-03-04 (수) : daysBetween 62 (짝수) -> 둘 다 가용
+        TaskDefinition task = taskRepository.findAll().get(0);
+
         LocalDate d1 = LocalDate.of(2026, 3, 2);
         LocalDate d2 = LocalDate.of(2026, 3, 4);
-        
-        ScheduleAssignment a1 = assignmentRepository.save(new ScheduleAssignment(taskId, d1, p1.getId()));
-        ScheduleAssignment a2 = assignmentRepository.save(new ScheduleAssignment(taskId, d2, p2.getId()));
-        
+
+        ScheduleAssignment a1 = assignmentRepository.save(new ScheduleAssignment(task, d1, p1));
+        ScheduleAssignment a2 = assignmentRepository.save(new ScheduleAssignment(task, d2, p2));
+
         distributionService.swapAssignments(a1.getId(), a2.getId());
-        
+
         ScheduleAssignment updatedA1 = assignmentRepository.findById(a1.getId()).get();
-        assertThat(updatedA1.getParticipantId()).isEqualTo(p2.getId());
+        assertThat(updatedA1.getParticipant().getId()).isEqualTo(p2.getId());
         assertThat(updatedA1.getStatus()).isEqualTo(AssignmentStatus.MANUAL_FIXED);
     }
 
@@ -101,7 +99,7 @@ class DistributionServiceTest {
     @DisplayName("다중 업무 일괄 배분 검증")
     void batchDistributeTest() {
         // 추가 업무 생성
-        TaskDefinition task2 = new TaskDefinition("야간", "WEEKLY", "MON,TUE,WED,THU,FRI,SAT,SUN", 1);
+        TaskDefinition task2 = new TaskDefinition("야간", CycleType.WEEKLY, "MON,TUE,WED,THU,FRI,SAT,SUN", 1);
         Participant p1 = participantRepository.findAll().stream().filter(p -> p.getName().equals("홍길동")).findFirst().get();
         Participant p2 = participantRepository.findAll().stream().filter(p -> p.getName().equals("이영희")).findFirst().get();
         task2.setAllowedParticipants(new java.util.ArrayList<>(List.of(p1, p2)));

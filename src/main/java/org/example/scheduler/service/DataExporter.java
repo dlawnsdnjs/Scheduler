@@ -35,7 +35,7 @@ public class DataExporter {
         }).toList();
 
         List<ExportDataDto.TaskDefinitionDataDto> tData = tasks.stream().map(t -> ExportDataDto.TaskDefinitionDataDto.builder()
-                .taskName(t.getTaskName()).cycleType(t.getCycleType()).cycleValue(t.getCycleValue())
+                .taskName(t.getTaskName()).cycleType(t.getCycleType().name()).cycleValue(t.getCycleValue())
                 .requiredParticipantsPerDay(t.getRequiredParticipantsPerDay()).color(t.getColor())
                 .allowedParticipantNames(t.getAllowedParticipants().stream().map(Participant::getName).toList())
                 .conflictingTaskNames(t.getConflictingTasks().stream().map(TaskDefinition::getTaskName).toList()).build()
