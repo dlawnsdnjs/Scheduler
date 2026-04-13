@@ -24,38 +24,7 @@ public class DistributionEngine {
     private final TaskDefinitionRepository taskRepository;
 
     public List<LocalDate> getTargetDates(TaskDefinition task, LocalDate start, LocalDate end) {
-        List<LocalDate> dates = new ArrayList<>();
-        LocalDate current = start;
-        while (!current.isAfter(end)) {
-            if (isTargetDate(task, current)) {
-                dates.add(current);
-            }
-            current = current.plusDays(1);
-        }
-        return dates;
-    }
-
-    private boolean isTargetDate(TaskDefinition task, LocalDate date) {
-        if ("WEEKLY".equals(task.getCycleType())) {
-            String[] days = task.getCycleValue().split(",");
-            String currentDay = parseToKoreanDay(date.getDayOfWeek());
-            return Arrays.stream(days).map(String::trim).anyMatch(d -> d.equals(currentDay));
-        } else if ("INTERVAL".equals(task.getCycleType())) {
-            return true; // 단순화를 위해 true 반환 (실제 로직은 서비스에서 보완 가능)
-        }
-        return false;
-    }
-
-    private String parseToKoreanDay(java.time.DayOfWeek day) {
-        return switch (day) {
-            case MONDAY -> "월";
-            case TUESDAY -> "화";
-            case WEDNESDAY -> "수";
-            case THURSDAY -> "목";
-            case FRIDAY -> "금";
-            case SATURDAY -> "토";
-            case SUNDAY -> "일";
-        };
+        return task.getTargetDates(start, end);
     }
 
     public void distributeOptimized(TaskDefinition task, List<LocalDate> targetDates, List<Participant> participants) {
