@@ -23,15 +23,15 @@ public class DistributionService {
     private final DistributionEngine distributionEngine;
 
     @Transactional
+    public void distribute(Long taskId, int year, int month) {
+        distribute(Collections.singletonList(taskId), year, month);
+    }
+
+    @Transactional
     public void distribute(List<Long> taskIds, int year, int month) {
         LocalDate start = LocalDate.of(year, month, 1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
         distribute(taskIds, start, end);
-    }
-
-    @Transactional
-    public void distribute(Long taskId, int year, int month) {
-        distribute(Collections.singletonList(taskId), year, month);
     }
 
     @Transactional
@@ -43,114 +43,63 @@ public class DistributionService {
     public void distribute(List<Long> taskIds, LocalDate start, LocalDate end) {
         if (taskIds == null || taskIds.isEmpty()) return;
 
-        List<TaskDefinition> tasks = taskRepository.findAllById(taskIds);
-        List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdInAndAssignedDateBetweenAndStatus(taskIds, start, end, AssignmentStatus.AUTOMATIC);
-        
-        // 1. 배정 삭제 및 통계 동기화
-        deleteAssignmentsAndSyncStats(toDelete);
+        for (Long taskId : taskIds) {
+            TaskDefinition task = taskRepository.findById(taskId).orElse(null);
+            if (task == null) continue;
 
-        List<ScheduleAssignment> allNewAssignments = new ArrayList<>();
-        for (TaskDefinition task : tasks) {
+            List<ScheduleAssignment> toDelete = assignmentRepository.findByTaskIdAndAssignedDateBetweenAndStatus(taskId, start, end, AssignmentStatus.AUTOMATIC);
             List<Participant> allowedParticipants = task.getAllowedParticipants();
+
             if (allowedParticipants.isEmpty()) continue;
-            
-            List<LocalDate> targetDates = task.getTargetDates(start, end);
+
+            // 1. 통계 원복
+            for (Participant p : allowedParticipants) {
+                long deletedCount = toDelete.stream().filter(a -> a.getParticipantId().equals(p.getId())).count();
+                p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - (int)deletedCount));
+
+                LocalDate lastDate = assignmentRepository.findByTaskIdAndAssignedDateBefore(taskId, start).stream()
+                        .filter(a -> a.getParticipantId().equals(p.getId()))
+                        .map(ScheduleAssignment::getAssignedDate)
+                        .max(LocalDate::compareTo)
+                        .orElse(LocalDate.MIN);
+                p.getTaskLastAssignedDates().put(taskId, lastDate);
+                participantRepository.save(p);
+            }
+            assignmentRepository.deleteAll(toDelete);
+
+            // 2. 배정 대상 날짜 생성
+            List<LocalDate> targetDates = distributionEngine.getTargetDates(task, start, end);
             Collections.sort(targetDates);
             
             if (targetDates.isEmpty()) continue;
 
-            distributionEngine.distributeOptimized(task, targetDates, allowedParticipants, allNewAssignments);
+            // 3. 최적화 배정 수행
+            distributionEngine.distributeOptimized(task, targetDates, allowedParticipants);
         }
-    }
-
-    private void deleteAssignmentsAndSyncStats(List<ScheduleAssignment> toDelete) {
-        if (toDelete.isEmpty()) return;
-        
-        // 영향을 받는 (참여자, 업무) 쌍 추출
-        Set<TaskParticipantPair> pairs = toDelete.stream()
-                .map(a -> new TaskParticipantPair(a.getTask().getId(), a.getParticipant()))
-                .collect(Collectors.toSet());
-
-        assignmentRepository.deleteAll(toDelete);
-
-        // 삭제 후 통계 재계산
-        for (TaskParticipantPair pair : pairs) {
-            syncParticipantStats(pair.participant, pair.taskId);
-        }
-    }
-
-    private void syncParticipantStats(Participant p, Long taskId) {
-        List<ScheduleAssignment> remaining = assignmentRepository.findByParticipantIdAndTaskId(p.getId(), taskId);
-        int count = remaining.size();
-        LocalDate lastDate = remaining.stream()
-                .map(ScheduleAssignment::getAssignedDate)
-                .max(LocalDate::compareTo)
-                .orElse(LocalDate.MIN);
-        
-        p.getTaskTotalCounts().put(taskId, count);
-        p.getTaskLastAssignedDates().put(taskId, lastDate);
-        participantRepository.save(p);
-    }
-
-    private static class TaskParticipantPair {
-        Long taskId;
-        Participant participant;
-
-        TaskParticipantPair(Long taskId, Participant participant) {
-            this.taskId = taskId;
-            this.participant = participant;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TaskParticipantPair that = (TaskParticipantPair) o;
-            return Objects.equals(taskId, that.taskId) && Objects.equals(participant.getId(), that.participant.getId());
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(taskId, participant.getId());
-        }
-    }
-
-    private Map<Long, Integer> calculateAvailableDays(List<LocalDate> targetDates, List<Participant> participants) {
-        Map<Long, Integer> map = new HashMap<>();
-        for (Participant p : participants) {
-            long count = targetDates.stream().filter(p::isAvailable).count();
-            map.put(p.getId(), (int) count);
-        }
-        return map;
     }
 
     @Transactional
-    public void reassignAssignment(Long assignmentId) {
+    public void cancelAndReplace(Long assignmentId) {
         ScheduleAssignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new IllegalArgumentException("Assignment not found"));
         
-        // 1. 기존 배정 취소
-        cancelAssignment(assignment);
-
-        // 2. 새로운 배정 시도
+        Long taskId = assignment.getTaskId();
+        LocalDate date = assignment.getAssignedDate();
         TaskDefinition task = assignment.getTask();
-        List<Participant> allowedParticipants = task.getAllowedParticipants();
-        
-        LocalDate start = assignment.getAssignedDate().withDayOfMonth(1);
-        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-        
-        List<LocalDate> targetDates = task.getTargetDates(start, end);
-        Map<Long, Integer> availableDaysCount = calculateAvailableDays(targetDates, allowedParticipants);
+        Participant p = assignment.getParticipant();
 
-        distributionEngine.assignForDate(task, assignment.getAssignedDate(), allowedParticipants, availableDaysCount, true);
+        p.addUnavailableRange(date, date);
+        p.getTaskTotalCounts().put(taskId, Math.max(0, p.getTaskCount(taskId) - 1));
+
+        assignmentRepository.delete(assignment);
+
+        List<Participant> allowedParticipants = task.getAllowedParticipants();
+        distributionEngine.assignForDate(task, date, allowedParticipants, null, true);
     }
 
-    private void cancelAssignment(ScheduleAssignment assignment) {
-        Participant p = assignment.getParticipant();
-        Long taskId = assignment.getTask().getId();
-        p.cancelAssignment(taskId, assignment.getAssignedDate());
-        assignmentRepository.delete(assignment);
-        syncParticipantStats(p, taskId);
+    @Transactional
+    public void reassignAssignment(Long id) {
+        cancelAndReplace(id);
     }
 
     @Transactional(readOnly = true)
@@ -158,7 +107,7 @@ public class DistributionService {
         LocalDate start = LocalDate.of(year, month, 1);
         LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
 
-        List<ScheduleAssignment> assignments = assignmentRepository.findAllWithTaskAndParticipant(start, end);
+        List<ScheduleAssignment> assignments = assignmentRepository.findByAssignedDateBetween(start, end);
 
         if (filterTaskId != null) {
             assignments = assignments.stream().filter(a -> a.getTaskId().equals(filterTaskId)).collect(Collectors.toList());
@@ -167,12 +116,22 @@ public class DistributionService {
             assignments = assignments.stream().filter(a -> a.getParticipantId().equals(filterParticipantId)).collect(Collectors.toList());
         }
 
+        Map<Long, TaskDefinition> tasks = taskRepository.findAllById(assignments.stream().map(ScheduleAssignment::getTaskId).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(TaskDefinition::getId, t -> t));
+        Map<Long, Participant> participants = participantRepository.findAllById(assignments.stream().map(ScheduleAssignment::getParticipantId).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(Participant::getId, p -> p));
+
         Map<LocalDate, List<CalendarAssignmentDto.AssignmentDetailDto>> grouped = assignments.stream()
+                .filter(a -> tasks.get(a.getTaskId()) != null && participants.get(a.getParticipantId()) != null)
                 .collect(Collectors.groupingBy(
                         ScheduleAssignment::getAssignedDate,
-                        Collectors.mapping(a -> new CalendarAssignmentDto.AssignmentDetailDto(
-                                    a.getId(), a.getTask().getId(), a.getTask().getTaskName(), a.getTask().getColor(), a.getParticipant().getId(), a.getParticipant().getName(), a.getStatus().name()
-                            ), Collectors.toList())
+                        Collectors.mapping(a -> {
+                            TaskDefinition t = tasks.get(a.getTaskId());
+                            Participant p = participants.get(a.getParticipantId());
+                            return new CalendarAssignmentDto.AssignmentDetailDto(
+                                    a.getId(), a.getTaskId(), t.getTaskName(), t.getColor(), a.getParticipantId(), p.getName(), a.getStatus().name()
+                            );
+                        }, Collectors.toList())
                 ));
 
         return grouped.entrySet().stream()
@@ -183,21 +142,16 @@ public class DistributionService {
 
     @Transactional
     public void deleteAssignment(Long id) {
-        assignmentRepository.findById(id).ifPresent(a -> {
-            Participant p = a.getParticipant();
-            Long taskId = a.getTask().getId();
-            assignmentRepository.delete(a);
-            syncParticipantStats(p, taskId);
-        });
+        assignmentRepository.deleteById(id);
     }
 
     @Transactional
     public void addManualAssignment(Long taskId, LocalDate date, Long participantId) {
-        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
-        if (existing.stream().anyMatch(a -> a.getParticipantId().equals(participantId))) return;
-
         TaskDefinition task = taskRepository.findById(taskId).orElseThrow();
         Participant p = participantRepository.findById(participantId).orElseThrow();
+
+        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
+        if (existing.stream().anyMatch(a -> a.getParticipantId().equals(participantId))) return;
 
         ScheduleAssignment assignment = new ScheduleAssignment(task, date, p);
         assignment.setStatus(AssignmentStatus.MANUAL_FIXED);
@@ -208,11 +162,11 @@ public class DistributionService {
 
     @Transactional
     public void manualAssign(Long taskId, LocalDate date, Long participantId) {
-        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
-        deleteAssignmentsAndSyncStats(existing);
-
         TaskDefinition task = taskRepository.findById(taskId).orElseThrow();
         Participant p = participantRepository.findById(participantId).orElseThrow();
+
+        List<ScheduleAssignment> existing = assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, date, date);
+        assignmentRepository.deleteAll(existing);
 
         ScheduleAssignment assignment = new ScheduleAssignment(task, date, p);
         assignment.setStatus(AssignmentStatus.MANUAL_FIXED);
@@ -233,16 +187,11 @@ public class DistributionService {
             throw new IllegalStateException("교체 대상 참여자가 해당 날짜에 가용하지 않습니다.");
         }
 
-        Participant tempP = a1.getParticipant();
-        a1.setParticipant(a2.getParticipant());
-        a2.setParticipant(tempP);
+        a1.setParticipant(p2);
+        a2.setParticipant(p1);
 
         a1.setStatus(AssignmentStatus.MANUAL_FIXED);
         a2.setStatus(AssignmentStatus.MANUAL_FIXED);
-        
-        // Swap 후 통계 동기화 (마지막 날짜가 바뀔 수 있음)
-        syncParticipantStats(p1, a1.getTask().getId());
-        syncParticipantStats(p2, a2.getTask().getId());
     }
 
     @Transactional
@@ -250,6 +199,6 @@ public class DistributionService {
         List<ScheduleAssignment> toDelete = (taskId != null) ? 
                 assignmentRepository.findByTaskIdAndAssignedDateBetween(taskId, start, end) :
                 assignmentRepository.findByAssignedDateBetween(start, end);
-        deleteAssignmentsAndSyncStats(toDelete);
+        assignmentRepository.deleteAll(toDelete);
     }
 }

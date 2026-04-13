@@ -16,10 +16,11 @@ public class ScheduleController {
     private final DistributionService distributionService;
 
     @PostMapping("/distribute")
-    public ResponseEntity<Void> distribute(@RequestParam(name = "taskId") List<Long> taskIds, @RequestParam int year, @RequestParam int month) {
-        distributionService.distribute(taskIds, year, month);
+    public ResponseEntity<Void> distribute(@RequestParam Long taskId, @RequestParam int year, @RequestParam int month) {
+        distributionService.distribute(taskId, year, month);
         return ResponseEntity.ok().build();
     }
+
 
     @GetMapping("/calendar")
     public ResponseEntity<List<CalendarAssignmentDto>> getCalendar(
@@ -38,7 +39,7 @@ public class ScheduleController {
 
     @PostMapping("/reassign")
     public ResponseEntity<Void> reassign(@RequestParam Long assignmentId) {
-        distributionService.reassignAssignment(assignmentId);
+        distributionService.cancelAndReplace(assignmentId);
         return ResponseEntity.ok().build();
     }
 }
